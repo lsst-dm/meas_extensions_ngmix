@@ -1,0 +1,7 @@
+setupRequired(afw)
+setupRequired(meas_base)
+setupRequired(pipe_tasks)
+setupRequired(ngmix)
+
+envPrepend(PATH, ${PRODUCT_DIR}/bin)
+envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
