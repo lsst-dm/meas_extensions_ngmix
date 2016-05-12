@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # LSST Data Management System
 # Copyright 2008-2015 AURA/LSST
 #
@@ -26,11 +25,11 @@ import math
 import numpy as np
 import unittest
 import itertools
-
 import lsst.pex.exceptions as pexExceptions
 import lsst.afw.image as afwImage
 import lsst.afw.math as afwMath
 import lsst.meas.base as measBase
+import lsst.meas.algorithms as measAlg
 from lsst.meas.base.tests import AlgorithmTestCase
 import lsst.meas.algorithms as algorithms
 import lsst.utils.tests as utilsTests
@@ -41,10 +40,27 @@ import lsst.afw.geom.ellipses as afwEll
 import lsst.afw.coord as afwCoord
 import lsst.afw.display.ds9 as ds9
 
-import lsst.meas.extensions.ngmix
+import lsst.meas.extensions.ngmix.emPsfApprox
+
+def makeGaussianImage(bbox, sigma, xc=0.0, yc=0.0):
+    image = afwImage.ImageD(bbox)
+    array = image.getArray()
+    for yi, yv in enumerate(xrange(bbox.getBeginY(), bbox.getEndY())):
+        for xi, xv in enumerate(xrange(bbox.getBeginX(), bbox.getEndX())):
+            array[yi, xi] = numpy.exp(-0.5*((xv - xc)**2 + (yv - yc)**2)/sigma**2)
+    array /= array.sum()
+    return image
+
+def makeGaussianArray(size, sigma, xc=0.0, yc=0.0):
+    image = afwImage.ImageD(afwGeom.Box2I(afwGeom.Point2I(0,0), afwGeom.Point2I(size,size)))
+    array = np.ndarray(shape = (size, size), dtype = np.float64)
+    for yi, yv in enumerate(xrange(0, size)):
+        for xi, xv in enumerate(xrange(0, size)):
+            array[yi, xi] = np.exp(-0.5*((xv - xc)**2 + (yv - yc)**2)/sigma**2)
+    array /= array.sum()
+    return array
 
 def makePluginAndCat(alg, name, control=None, metadata=False, centroid=None):
-    print "Making plugin ", alg, name
     if control == None:
         control=alg.ConfigClass()
     schema = afwTable.SourceTable.makeMinimalSchema()
@@ -68,14 +84,16 @@ class ShapeTestCase(AlgorithmTestCase):
     """A test case for shape measurement"""
 
 
-    def testNgmixShape(self):
+    def testEMPlugin(self):
         """Test that we can instantiate and play with a measureShape"""
 
-        algorithmName = "meas_extensions_ngmix"
+        algorithmName = "meas_extensions_ngmix_emPsfApprox"
         # perform the shape measurement
         msConfig = measBase.SingleFrameMeasurementConfig()
         msConfig.plugins = [algorithmName]
-        msConfig.plugins["meas_extensions_ngmix"].numGaussians = 4
+        msConfig.plugins["meas_extensions_ngmix_emPsfApprox"].nGauss = 2
+        msConfig.plugins["meas_extensions_ngmix_emPsfApprox"].tolerance = 1e-4
+        msConfig.plugins["meas_extensions_ngmix_emPsfApprox"].maxIter = 10000
         schema = afwTable.SourceTable.makeMinimalSchema()
         schema.addField("truth" + "_x", type=float)
         schema.addField("truth" + "_y", type=float)
@@ -90,17 +108,34 @@ class ShapeTestCase(AlgorithmTestCase):
         task = measBase.SingleFrameMeasurementTask(schema=schema, config=msConfig)
         self.dataDir = os.path.join(os.getenv('MEAS_EXTENSIONS_NGMIX_DIR'), "tests", "data")
         exposure = afwImage.ExposureF(os.path.join(self.dataDir, "exp.fits"))
+        array0 = makeGaussianArray(67, 4.0, 33, 33)
+        array0 *= .7
+        array1 = makeGaussianArray(67, 12.0, 33, 33)
+        array1 *= .3
+        kernel = lsst.afw.math.FixedKernel(lsst.afw.image.ImageD(array0 + array1))
+        psf = lsst.meas.algorithms.KernelPsf(kernel)
+        exposure.setPsf(psf)
 
         cat = afwTable.SourceCatalog(schema)
         #source.setFootprint(afwDetection.Footprint(afwGeom.Point2I(23, 34), width))
         source = cat.addNew()
-        plugin = task.plugins['meas_extensions_ngmix']
+        plugin = task.plugins['meas_extensions_ngmix_emPsfApprox']
         plugin.measure(source, exposure)
-        sub = schema["meas_extensions_ngmix"]
-        for name in sub.getNames():
-            print name
-            print source.get(sub.find(name).key)
-            
+        self.msfKey = lsst.shapelet.MultiShapeletFunctionKey(schema["meas_extensions_ngmix_emPsfApprox"],
+                                                             lsst.shapelet.HERMITE)
+        msf = source.get(self.msfKey)
+        eval0 = source.get(lsst.shapelet.ShapeletFunctionKey(schema["meas_extensions_ngmix_emPsfApprox_0"])).evaluate()
+        eval1 = source.get(lsst.shapelet.ShapeletFunctionKey(schema["meas_extensions_ngmix_emPsfApprox_1"])).evaluate()
+        if eval0.integrate() < eval1.integrate():
+            temp = eval1
+            eval1 = eval0
+            eval0 = temp
+        core0 = eval0.computeMoments().getCore()
+        core1 = eval1.computeMoments().getCore()
+        self.assertClose(eval0.integrate(), .7, rtol = .3)
+        self.assertClose(core0.getIxx() + core0.getIyy(), 32, rtol = .3)
+        self.assertClose(eval1.integrate(), .3, rtol = .3)
+        self.assertClose(core1.getIxx() + core1.getIyy(), 288, rtol = .3)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
