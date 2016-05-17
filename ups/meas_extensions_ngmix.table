@@ -1,7 +1,7 @@
 setupRequired(afw)
+setupRequired(meas_algorithms)
 setupRequired(meas_base)
-setupRequired(pipe_tasks)
+setupRequired(shapelet)
 setupRequired(ngmix)
 
-envPrepend(PATH, ${PRODUCT_DIR}/bin)
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)

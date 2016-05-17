@@ -20,5 +20,4 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-from .ngmix import *
-
+from .EMPsfApprox import *

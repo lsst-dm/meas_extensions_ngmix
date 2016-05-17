@@ -1,0 +1,151 @@
+#!/usr/bin/env python
+#
+# LSST Data Management System
+# Copyright 2008-2016 AURA/LSST.
+#
+# This product includes software developed by the
+# LSST Project (http://www.lsst.org/).
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.    See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the LSST License Statement and
+# the GNU General Public License along with this program.  If not,
+# see <http://www.lsstcorp.org/LegalNotices/>.
+#
+"""
+Definitions and registration of pure-Python plugins with trivial implementations,
+and automatic plugin-from-algorithm calls for those implemented in C++.
+"""
+import numpy
+import ngmix
+from ngmix.bootstrap import EMRunner
+from ngmix.em import EM_RANGE_ERROR, EM_MAXITER
+import lsst.pex.exceptions
+import lsst.afw.detection
+import lsst.afw.geom
+import lsst.afw.geom as afwGeom
+import lsst.afw.math as afwMath
+import lsst.afw.image as afwImage
+import lsst.shapelet
+
+from lsst.meas.base.pluginRegistry import register
+from lsst.meas.base.sfm import SingleFramePluginConfig, SingleFramePlugin
+from lsst.meas.base.baseLib import MeasurementError
+from lsst.meas.base import FlagDefinition, FlagDefinitionVector, FlagHandler
+
+__all__ = (
+    "SingleFrameEmPsfApproxConfig", "SingleFrameEmPsfApproxPlugin"
+)
+
+class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
+
+    nGauss = lsst.pex.config.Field(dtype=int, default=1, optional=False,
+                                  doc="Number of gaussians")
+    nTries = lsst.pex.config.Field(dtype=int, default=10, optional=False,
+                                  doc="maximum number of tries with different guesses")
+    maxIters = lsst.pex.config.Field(dtype=int, default=10000, optional=False,
+                                  doc="maximum number of iterations")
+    tolerance = lsst.pex.config.Field(dtype=float, default=1e-6, optional=False,
+                                  doc="tolerance")
+
+@register("meas_extensions_ngmix_EMPsfApprox")
+class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
+    '''
+    Plugin to do Psf Modelling using the ngmix Expectation-Maximization Algorithm.
+    Returns nGauss Gaussians, where nGauss is 1, 2, or 3.
+    '''
+    ConfigClass = SingleFrameEmPsfApproxConfig
+
+    # Constants to identify the failures.  Must match flagDefs below
+    FAILURE = 0
+    RANGE_ERROR = 1
+    MAXITER = 2
+    NO_PSF = 3
+
+    gaussian_pars_len = 6
+
+    FLAGDEFS = [ FlagDefinition("flag", "General failure error"),
+        FlagDefinition("flag_rangeError", "Iteration error in Gaussian parameters."),
+        FlagDefinition("flag_maxIters", "Fitter exceeded maxIters setting without converging."),
+        FlagDefinition("flag_noPsf", "No PSF attached to the exposure.")
+    ]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.SHAPE_ORDER
+
+    def __init__(self, config, name, schema, metadata):
+        SingleFramePlugin.__init__(self, config, name, schema, metadata)
+
+        self.flagHandler = FlagHandler.addFields(schema, name, FlagDefinitionVector(self.FLAGDEFS))
+        self.iterKey = schema.addField(name + '_iterations', type=int, doc="number of iterations run")
+        self.fdiffKey = schema.addField(name + '_fdiff', type=float, doc="fit difference")
+
+        # Add ShapeletFunction keys for the number of Gaussians requested
+        self.keys = []
+        for i in range(config.nGauss):
+            key = lsst.shapelet.ShapeletFunctionKey.addFields(schema,
+                  "%s_%d"%(name, i), "ngmix EM gaussian", "pixels", "",
+                  0, lsst.shapelet.HERMITE)
+            self.keys.append(key)
+        self.msfKey = lsst.shapelet.MultiShapeletFunctionKey(self.keys)
+
+    def measure(self, measRecord, exposure):
+
+        if exposure.getPsf() is None:
+            raise MeasurementError(self.flagHandler.getDefinition(self.NO_PSF).doc, self.NO_PSF)
+        psfArray = exposure.getPsf().computeKernelImage().getArray()
+        psfObs = ngmix.observation.Observation(psfArray,
+            jacobian=ngmix.UnitJacobian(row=(psfArray.shape[0]-1)/2, col=(psfArray.shape[1]-1)/2))
+
+        #  Need a guess at the sum of the diagonal moments
+        nGauss = self.config.nGauss
+        shape = exposure.getPsf().computeShape()
+        Tguess = shape.getIxx() + shape.getIyy()
+        emPars={'maxiter':self.config.maxIters, 'tol':self.config.tolerance}
+
+        runner=EMRunner(psfObs, Tguess, nGauss, emPars)
+        runner.go(ntry=self.config.nTries)
+        fitter=runner.get_fitter()
+        res=fitter.get_result()
+
+        #   Set the results, including the fit info returned by EMRunner
+        measRecord.set(self.iterKey, res['numiter'])
+        measRecord.set(self.fdiffKey, res['fdiff'])
+
+        #   We only know about two EM errors.  Anything else is thrown as "unknown".
+        if res['flags'] != 0:
+            if res['flags'] & EM_RANGE_ERROR:
+                raise MeasurementError(self.flagHandler.getDefinition(self.RANGE_ERROR).doc, self.RANGE_ERROR)
+            if res['flags'] & EM_MAXITER:
+                raise MeasurementError(self.flagHandler.getDefinition(self.MAXITER).doc, self.MAXITER)
+            raise RuntimeError("Unknown EM fitter exception")
+
+        #   Convert the nGauss Gaussians to ShapeletFunction's.  Zeroth order HERMITES are Gaussians.
+        #   There are always 6 parameters for each Gaussian.
+        psf_pars = fitter.get_gmix().get_full_pars()
+        #  Gaussian pars are 6 numbers long.  Pick the results off one at a time
+        print "PARS: ", psf_pars
+        for i in range(self.config.nGauss):
+            flux, y, x, iyy, ixy, ixx = psf_pars[i*self.gaussian_pars_len: (i+1)*self.gaussian_pars_len]
+            quad = lsst.afw.geom.ellipses.Quadrupole(ixx, iyy, ixy)
+            ellipse = lsst.afw.geom.ellipses.Ellipse(quad, lsst.afw.geom.Point2D(x,y))
+            # create a 0th order (gaussian) shapelet function.
+            sf = lsst.shapelet.ShapeletFunction(0, lsst.shapelet.HERMITE, ellipse)
+            sf.getCoefficients()[0] = flux/lsst.shapelet.ShapeletFunction.FLUX_FACTOR
+            measRecord.set(self.keys[i], sf)
+
+    #   This routine responds to the standard failure call in baseMeasurement
+    def fail(self, measRecord, error=None):
+        if error is None:
+            self.flagHandler.handleFailure(measRecord)
+        else:
+            self.flagHandler.handleFailure(measRecord, error.cpp)
