@@ -40,6 +40,7 @@ from lsst.meas.base.pluginRegistry import register
 from lsst.meas.base.sfm import SingleFramePluginConfig, SingleFramePlugin
 from lsst.meas.base.baseLib import MeasurementError
 from lsst.meas.base import FlagDefinition, FlagDefinitionVector, FlagHandler
+import lsst.meas.base.flagDecorator
 
 __all__ = (
     "SingleFrameEmPsfApproxConfig", "SingleFrameEmPsfApproxPlugin"
@@ -57,6 +58,11 @@ class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
                                   doc="tolerance")
 
 @register("meas_extensions_ngmix_EMPsfApprox")
+@lsst.meas.base.flagDecorator.addFlagHandler(("flag", "General Failure error"),
+        ("flag_rangeError", "Iteration error in Gaussian parameters."),
+        ("flag_maxIters", "Fitter exceeded maxIters setting without converging."),
+        ("flag_noPsf", "No PSF attached to the exposure.")
+    )
 class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
     '''
     Plugin to do Psf Modelling using the ngmix Expectation-Maximization Algorithm.
@@ -64,19 +70,7 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
     '''
     ConfigClass = SingleFrameEmPsfApproxConfig
 
-    # Constants to identify the failures.  Must match flagDefs below
-    FAILURE = 0
-    RANGE_ERROR = 1
-    MAXITER = 2
-    NO_PSF = 3
-
     gaussian_pars_len = 6
-
-    FLAGDEFS = [ FlagDefinition("flag", "General failure error"),
-        FlagDefinition("flag_rangeError", "Iteration error in Gaussian parameters."),
-        FlagDefinition("flag_maxIters", "Fitter exceeded maxIters setting without converging."),
-        FlagDefinition("flag_noPsf", "No PSF attached to the exposure.")
-    ]
 
     @classmethod
     def getExecutionOrder(cls):
@@ -85,7 +79,6 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
     def __init__(self, config, name, schema, metadata):
         SingleFramePlugin.__init__(self, config, name, schema, metadata)
 
-        self.flagHandler = FlagHandler.addFields(schema, name, FlagDefinitionVector(self.FLAGDEFS))
         self.iterKey = schema.addField(name + '_iterations', type=int, doc="number of iterations run")
         self.fdiffKey = schema.addField(name + '_fdiff', type=float, doc="fit difference")
 
@@ -101,7 +94,9 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
     def measure(self, measRecord, exposure):
 
         if exposure.getPsf() is None:
-            raise MeasurementError(self.flagHandler.getDefinition(self.NO_PSF).doc, self.NO_PSF)
+            raise MeasurementError(
+                self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_noPsf).doc,
+                SingleFrameEmPsfApproxPlugin.ErrEnum.flag_noPsf)
         psfArray = exposure.getPsf().computeKernelImage().getArray()
         psfObs = ngmix.observation.Observation(psfArray,
             jacobian=ngmix.UnitJacobian(row=(psfArray.shape[0]-1)/2, col=(psfArray.shape[1]-1)/2))
@@ -124,16 +119,19 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
         #   We only know about two EM errors.  Anything else is thrown as "unknown".
         if res['flags'] != 0:
             if res['flags'] & EM_RANGE_ERROR:
-                raise MeasurementError(self.flagHandler.getDefinition(self.RANGE_ERROR).doc, self.RANGE_ERROR)
+                raise MeasurementError(
+                    self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_rangeError).doc,
+                    SingleFrameEmPsfApproxPlugin.ErrEnum.flag_rangeError)
             if res['flags'] & EM_MAXITER:
-                raise MeasurementError(self.flagHandler.getDefinition(self.MAXITER).doc, self.MAXITER)
+                raise MeasurementError(
+                    self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_maxIters).doc,
+                    SingleFrameEmPsfApproxPlugin.ErrEnum.flag_maxIters)
             raise RuntimeError("Unknown EM fitter exception")
 
         #   Convert the nGauss Gaussians to ShapeletFunction's.  Zeroth order HERMITES are Gaussians.
         #   There are always 6 parameters for each Gaussian.
         psf_pars = fitter.get_gmix().get_full_pars()
         #  Gaussian pars are 6 numbers long.  Pick the results off one at a time
-        print "PARS: ", psf_pars
         for i in range(self.config.nGauss):
             flux, y, x, iyy, ixy, ixx = psf_pars[i*self.gaussian_pars_len: (i+1)*self.gaussian_pars_len]
             quad = lsst.afw.geom.ellipses.Quadrupole(ixx, iyy, ixy)
