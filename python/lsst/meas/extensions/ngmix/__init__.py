@@ -21,3 +21,4 @@
 #
 
 from .EMPsfApprox import *
+from .LMSimpleShape import *
