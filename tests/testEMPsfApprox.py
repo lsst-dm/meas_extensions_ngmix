@@ -19,33 +19,29 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-import re, os, sys
-import glob
-import math
+import os
 import numpy as np
 import unittest
 import itertools
+
 import lsst.pex.exceptions as pexExceptions
 import lsst.afw.image as afwImage
 import lsst.afw.math as afwMath
-import lsst.utils.tests as utilsTests
 import lsst.afw.detection as afwDetection
-import lsst.afw.table as afwTable
 import lsst.afw.geom as afwGeom
-import lsst.afw.geom.ellipses as afwEll
-import lsst.afw.coord as afwCoord
-import lsst.afw.display.ds9 as ds9
+import lsst.afw.table as afwTable
 import lsst.meas.algorithms as measAlg
 import lsst.meas.base as measBase
 import lsst.meas.base.tests
+
 import lsst.meas.extensions.ngmix.EMPsfApprox
 
 #   Create an array of size x size containing a 2D circular Gaussian of size sigma.  Normalized to 1.0
 def makeGaussianArray(size, sigma, xc=None, yc=None):
     if xc == None:
-        xc = (size-1)/2
+        xc = (size-1)/2.0
     if yc == None:
-        yc = (size-1)/2
+        yc = (size-1)/2.0
     image = afwImage.ImageD(afwGeom.Box2I(afwGeom.Point2I(0,0), afwGeom.Point2I(size,size)))
     array = np.ndarray(shape = (size, size), dtype = np.float64)
     for yi, yv in enumerate(xrange(0, size)):
@@ -81,7 +77,7 @@ class EMTestCase(lsst.meas.base.tests.AlgorithmTestCase):
     """A test case for shape measurement"""
 
     def setUp(self):
-        self.dataDir = os.path.join(os.getenv('MEAS_EXTENSIONS_NGMIX_DIR'), "tests", "data")
+        self.dataDir = os.path.join(lsst.utils.getPackageDir("meas_extensions_ngmix"), "tests", "data")
         self.algName = "meas_extensions_ngmix_EMPsfApprox"
 
     def makeConfig(self):
@@ -180,6 +176,9 @@ class EMTestCase(lsst.meas.base.tests.AlgorithmTestCase):
             temp = comp1
             comp1 = comp0
             comp0 = temp
+        #  We are not looking for really close matches in this unit test, which is why
+        #  the tolerances are set rather large.  Really just a check that we are getting
+        #  some kind of reasonable value for the fit.  A more quantitative test may be needed.
         self.assertClose(flux0/flux1, 7.0/3.0, rtol = .05)
         self.assertClose(comp0.getEllipse().getCore().getIxx(), 16.0, rtol = .05)
         self.assertClose(comp0.getEllipse().getCore().getIyy(), 16.0, rtol = .05)
@@ -188,21 +187,5 @@ class EMTestCase(lsst.meas.base.tests.AlgorithmTestCase):
         self.assertClose(comp1.getEllipse().getCore().getIyy(), 100.0, rtol = .05)
         self.assertClose(comp1.getEllipse().getCore().getIxy(), 0.0, atol = .1)
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-def suite():
-    """Returns a suite containing all the test cases in this module."""
-    utilsTests.init()
-
-    suites = []
-    suites += unittest.makeSuite(EMTestCase)
-    suites += unittest.makeSuite(utilsTests.MemoryTestCase)
-
-    return unittest.TestSuite(suites)
-
-def run(exit = False):
-    """Run the tests"""
-    utilsTests.run(suite(), exit)
-
 if __name__ == "__main__":
-    run(True)
+    unittest.main()

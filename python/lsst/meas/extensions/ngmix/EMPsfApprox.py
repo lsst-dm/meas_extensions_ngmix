@@ -42,9 +42,7 @@ from lsst.meas.base.baseLib import MeasurementError
 from lsst.meas.base import FlagDefinition, FlagDefinitionVector, FlagHandler
 import lsst.meas.base.flagDecorator
 
-__all__ = (
-    "SingleFrameEmPsfApproxConfig", "SingleFrameEmPsfApproxPlugin"
-)
+__all__ = ("SingleFrameEmPsfApproxConfig", "SingleFrameEmPsfApproxPlugin")
 
 class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
 
@@ -92,7 +90,6 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
         self.msfKey = lsst.shapelet.MultiShapeletFunctionKey(self.keys)
 
     def measure(self, measRecord, exposure):
-
         if exposure.getPsf() is None:
             raise MeasurementError(
                 self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_noPsf).doc,
