@@ -25,8 +25,8 @@ Definitions and registration of pure-Python plugins with trivial implementations
 and automatic plugin-from-algorithm calls for those implemented in C++.
 """
 import ngmix
-from ngmix.fitting import LMSimple, LM_SINGULAR_MATRIX, LM_NEG_COV_EIG, LM_NEG_COV_DIAG,\
-    EIG_NOTFINITE, LM_FUNC_NOTFINITE, DIV_ZERO
+from ngmix.fitting import (LMSimple, LM_SINGULAR_MATRIX, LM_NEG_COV_EIG, LM_NEG_COV_DIAG,
+                           EIG_NOTFINITE, LM_FUNC_NOTFINITE, DIV_ZERO)
 from ngmix.observation import Observation
 
 import lsst.pex.exceptions
