@@ -55,8 +55,14 @@ def runMeasure(task, schema, exposure):
     cat = afwTable.SourceCatalog(schema)
     source = cat.addNew()
     dettask = measAlg.SourceDetectionTask()
+
+    # Suppress non-essential task output.
     dettask.log.setThreshold(dettask.log.WARN)
-    task.log.setThreshold(task.log.WARN)
+
+    # We are expecting this task to log an error. Suppress it, so that it
+    # doesn't appear on the console or in logs, and incorrectly cause the user
+    # to assume a failure.
+    task.log.setThreshold(task.log.FATAL)
     footprints = dettask.detectFootprints(exposure, sigma=4.0).positive.getFootprints()
     source.setFootprint(footprints[0])
     task.run(exposure, cat)

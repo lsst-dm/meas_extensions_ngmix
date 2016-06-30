@@ -25,8 +25,8 @@ Definitions and registration of pure-Python plugins with trivial implementations
 and automatic plugin-from-algorithm calls for those implemented in C++.
 """
 import ngmix
-from ngmix.fitting import LMSimple, LM_SINGULAR_MATRIX, LM_NEG_COV_EIG, LM_NEG_COV_DIAG,\
-    EIG_NOTFINITE, LM_FUNC_NOTFINITE, LM_DIV_ZERO
+from ngmix.fitting import (LMSimple, LM_SINGULAR_MATRIX, LM_NEG_COV_EIG, LM_NEG_COV_DIAG,
+                           EIG_NOTFINITE, LM_FUNC_NOTFINITE, DIV_ZERO)
 from ngmix.observation import Observation
 
 import lsst.pex.exceptions
@@ -202,7 +202,7 @@ class SingleFrameNgmixPlugin(SingleFramePlugin):
                 raise MeasurementError(
                     self.flagHandler.getDefinition(SingleFrameNgmixPlugin.ErrEnum.flag_funcNotFinite).doc,
                     SingleFrameNgmixPlugin.ErrEnum.flag_funcNotFinite)
-            if res['flags'] & LM_DIV_ZERO:
+            if res['flags'] & DIV_ZERO:
                 raise MeasurementError(
                     self.flagHandler.getDefinition(SingleFrameNgmixPlugin.ErrEnum.flag_divZero).doc,
                     SingleFrameNgmixPlugin.ErrEnum.flag_divZero)
