@@ -93,6 +93,13 @@ class SingleFrameNgmixPlugin(SingleFramePlugin):
     def __init__(self, config, name, schema, metadata):
         SingleFramePlugin.__init__(self, config, name, schema, metadata)
 
+        self.xKey = schema.addField(name + "_x", type="D", doc="x centroid of model fit", units="")
+        self.yKey = schema.addField(name + "_y", type="D", doc="y centroid of model fit", units="")
+        self.fluxKey = schema.addField(name + "_flux", type="D", doc="flux of model fit", units="")
+        self.sigmaKey = schema.addField(name + "_sigma", type="D", doc="sigma(width) of model fit", units="")
+        self.TKey = schema.addField(name + "_T", type="D", doc="composite moment of model fit", units="")
+        self.e1Key = schema.addField(name + "_e1", type="D", doc="e1 of model fit", units="")
+        self.e2Key = schema.addField(name + "_e2", type="D", doc="e2 of model fit", units="")
         # Add ShapeletFunction keys for the number of Gaussians required
         self.keys = []
         self.nGauss = self.getModelInfo(self.config.model)["nGauss"]
@@ -117,7 +124,7 @@ class SingleFrameNgmixPlugin(SingleFramePlugin):
                                    SingleFrameNgmixPlugin.ErrEnum.flag_noPsf)
         # make an observation for the psf image
         psfArray = psf.computeKernelImage().getArray()
-        psfJacob = ngmix.UnitJacobian(row=(psfArray.shape[0] - 1.0)/2.0, col=(psfArray.shape[1] - 1.0)/2.0)
+        psfJacob = ngmix.UnitJacobian(row=psfArray.shape[0]/2.0, col=psfArray.shape[1]/2.0)
         psfObs = Observation(psfArray, jacobian=psfJacob)
 
         #   Fallback code if no psf algorithm is requested.  Then just do an LM single gaussian fit
@@ -126,8 +133,7 @@ class SingleFrameNgmixPlugin(SingleFramePlugin):
             #   gues parameters for a simple Gaussian
             psfPars = [0.0, 0.0, -0.03, 0.02, 8.0, 1.0]
             pfitter.go(psfPars)
-            psfGMixFit = pfitter.get_gmix()
-            psfObs.set_gmix(psfGMixFit)
+            psfGMix = pfitter.get_gmix()
         else:
             shape = psfArray.shape
             image = lsst.afw.image.ImageD(shape[1], shape[0])
@@ -146,41 +152,40 @@ class SingleFrameNgmixPlugin(SingleFramePlugin):
                 psfPars.append(sf.getEllipse().getCore().getIyy())
                 psfPars.append(sf.getEllipse().getCore().getIxy())
                 psfPars.append(sf.getEllipse().getCore().getIxx())
-            gmix = ngmix.gmix.GMix(len(shapeletFunctions), psfPars)
-            psfObs.set_gmix(gmix)
+            psfGMix = ngmix.gmix.GMix(len(shapeletFunctions), psfPars)
+        psfObs.set_gmix(psfGMix)
 
         #   Now create an obs for the galaxy itself, including the weight plane
         galArray = exposure.getMaskedImage().getImage().getArray()
-        gal_jacob = ngmix.UnitJacobian(row=(galArray.shape[1] - 1)/2.0, col=(galArray.shape[0] - 1)/2.0)
+        galShape = galArray.shape
+        galJacob = ngmix.UnitJacobian(row=galShape[1]/2.0, col=galShape[0]/2.0)
         variance = exposure.getMaskedImage().getVariance().getArray()
         gal_weight = 1/variance
-        obs = Observation(galArray, weight=gal_weight, jacobian=gal_jacob, psf=psfObs)
+        obs = Observation(galArray, weight=gal_weight, jacobian=galJacob, psf=psfObs)
 
-        #   Run detection on the source image to get a guess of the object pars
-        #   This will give us a rough guess about the shape of the object and its centroid
-        threshold = lsst.afw.detection.Threshold(5.0, lsst.afw.detection.Threshold.STDEV)
-        fpSet = lsst.afw.detection.FootprintSet(exposure.getMaskedImage().getImage(), threshold)
-        if len(fpSet.getFootprints()) > 1:
-            raise RuntimeError("Threshold value results in multiple Footprints for a single object")
-        if len(fpSet.getFootprints()) == 0:
-            raise RuntimeError("Threshold value results in zero Footprints for object")
-        fp = fpSet.getFootprints()[0]
-        x = fp.getCentroid().getX() - exposure.getXY0().getX()
-        y = fp.getCentroid().getY() - exposure.getXY0().getY()
+        fp = measRecord.getFootprint()
+
+        bbox = fp.getBBox()
+        ymin = bbox.getBeginY() - exposure.getXY0().getY()
+        ymax = bbox.getEndY() - exposure.getXY0().getY()
+        xmin = bbox.getBeginX() - exposure.getXY0().getX()
+        xmax = bbox.getEndX() - exposure.getXY0().getX()
+        flux = exposure.getMaskedImage().getImage().getArray()[ymin:ymax, xmin:xmax].sum()
+
         xx = fp.getShape().getIxx()
         yy = fp.getShape().getIyy()
         xy = fp.getShape().getIxy()
-        #    set the guess as [cen1, cen2, g1, g2, T, flux]
-        guess = (x, y, (xx-yy)/(xx+yy), 2*xy/(xx+yy), xx+yy, galArray[x, y])
 
         #   Now run the shape algorithm, using the config parameters
         lmPars = {'maxfev': self.config.maxfev, 'ftol': self.config.ftol, 'xtol': self.config.xtol}
-        fitter = LMSimple(obs, self.config.model, lm_pars=lmPars)
-        fitter.go(guess=guess)
+        maxPars = {'method':'lm', 'lm_pars':lmPars}
+        guesser = ngmix.guessers.TFluxGuesser(xx+yy, flux)
+        runner = ngmix.bootstrap.MaxRunner(obs, self.config.model, maxPars, guesser)
+        runner.go(ntry=4)
+        fitter = runner.fitter
         res = fitter.get_result()
 
-        #   Set the results, including the fit info returned by EMRunner
-        #   We only know about two EM errors.  Anything else is thrown as "unknown".
+        #   Set the results, including the fit info returned by MaxRunner
         if res['flags'] != 0:
             if res['flags'] & LM_SINGULAR_MATRIX:
                 raise MeasurementError(self.flagHandler.getDefinition(
@@ -215,7 +220,20 @@ class SingleFrameNgmixPlugin(SingleFramePlugin):
 
         #   Convert the nGauss Gaussians to ShapeletFunction's. Zeroth order HERMITES are Gaussians.
         #   There are always 6 parameters for each Gaussian.
-        galPars = fitter.get_gmix().get_full_pars()
+        galGMix = fitter.get_gmix()
+        galPars = galGMix.get_full_pars()
+
+        # convert the center in row,col coordinates to pixel coordinates and save
+        cen = galGMix.get_cen()
+        measRecord.set(self.xKey, cen[1] + galShape[1]/2.0)
+        measRecord.set(self.yKey, cen[0] + galShape[0]/2.0)
+        # save the model flux
+        measRecord.set(self.fluxKey, galGMix.get_flux())
+        # save the model T=xx+yy, e1, and e2
+        (e1, e2, T) = galGMix.get_e1e2T()
+        measRecord.set(self.e1Key, e1)
+        measRecord.set(self.e2Key, e2)
+        measRecord.set(self.TKey, T)
         for i in range(self.nGauss):
             flux, y, x, iyy, ixy, ixx = galPars[i*self._gaussian_pars_len: (i+1)*self._gaussian_pars_len]
             quad = lsst.afw.geom.ellipses.Quadrupole(ixx, iyy, ixy)
