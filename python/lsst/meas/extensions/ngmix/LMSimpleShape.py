@@ -38,16 +38,22 @@ from lsst.meas.base.baseLib import MeasurementError
 import lsst.meas.base.flagDecorator
 from lsst.shapelet import ShapeletFunction, ShapeletFunctionKey, MultiShapeletFunctionKey, HERMITE
 
-__all__ = ("SingleFrameNgmixConfig", "SingleFrameNgmixPlugin")
+__all__ = ("SingleFrameLMSimpleShapeConfig", "SingleFrameLMSimpleShapePlugin")
 
 
-class SingleFrameNgmixConfig(SingleFramePluginConfig):
+class SingleFrameLMSimpleShapeConfig(SingleFramePluginConfig):
+    '''
+    Configuration class for SingleFrameLMSimpleShapePlugin
 
+    psfName selects the plugin which is used to model the PSF.
+    model selects the type of profile (Gaussian, Exponential, Devaucouleur)
+    maxfev, ftol, and xtol are runtime parameters sent to ngmix.EMRunner
+    '''
     psfName = lsst.pex.config.Field(dtype=str, default=None, optional=False,
                                     doc = "Field name prefix of the PSF approximation plugin to use")
 
     model = lsst.pex.config.Field(dtype=str, default="gauss", optional=False,
-                                  doc="which LMSimple model to run")
+                                  doc="which LMSimple model to run (gauss, dev, exp")
     maxfev = lsst.pex.config.Field(dtype=int, default=4000, optional=False,
                                    doc="maximum number of function evaluations")
     ftol = lsst.pex.config.Field(dtype=float, default=1e-5, optional=False,
@@ -66,12 +72,18 @@ class SingleFrameNgmixConfig(SingleFramePluginConfig):
         ("flag_eigNotFinite", "Eig not finite"),
         ("flag_funcNotFinite", "Func not finite"),
         ("flag_divideByZero", "Divide by Zero"))
-class SingleFrameNgmixPlugin(SingleFramePlugin):
+class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
     '''
-    Plugin to do shape measurement using ngmix.LMSimple fitter
-    May be run using gauss, dev, or exp model
+    Plugin to do shape measurement using ngmix Levenberg-Marquardt fitters
+    Supports the Devaucouleur, Exponential, and Gaussian models.
+
+    * config.psfName selects the plugin which is used to model the Psf.
+    * config.model selects the type of profile (gauss, exp, or dev)
+
+    The Gaussian mixture and the values x, y, flux, e1, e2, T are saved.
+    to the measurement record if the measure() method is successful.
     '''
-    ConfigClass = SingleFrameNgmixConfig
+    ConfigClass = SingleFrameLMSimpleShapeConfig
 
     #   Length of a single gaussian representation in ngmix
     _gaussian_pars_len = 6
@@ -93,7 +105,6 @@ class SingleFrameNgmixPlugin(SingleFramePlugin):
     def __init__(self, config, name, schema, metadata):
         SingleFramePlugin.__init__(self, config, name, schema, metadata)
 
-        self.momentsFailureKey = schema.addField(name + "_momentsFailureFlag", type="Flag", doc="compute Moments failed", units="pixel")
         self.xKey = schema.addField(name + "_x", type="D", doc="x centroid of model fit", units="")
         self.yKey = schema.addField(name + "_y", type="D", doc="y centroid of model fit", units="")
         self.fluxKey = schema.addField(name + "_flux", type="D", doc="flux of model fit", units="")
@@ -121,8 +132,8 @@ class SingleFrameNgmixPlugin(SingleFramePlugin):
         psf = exposure.getPsf()
         if psf is None:
             raise MeasurementError(self.flagHandler.getDefinition(
-                                   SingleFrameNgmixPlugin.ErrEnum.flag_noPsf).doc,
-                                   SingleFrameNgmixPlugin.ErrEnum.flag_noPsf)
+                                   SingleFrameLMSimpleShapePlugin.ErrEnum.flag_noPsf).doc,
+                                   SingleFrameLMSimpleShapePlugin.ErrEnum.flag_noPsf)
         # make an observation for the psf image
         psfArray = psf.computeKernelImage().getArray()
         psfJacob = ngmix.UnitJacobian(row=psfArray.shape[0]/2.0, col=psfArray.shape[1]/2.0)
@@ -191,32 +202,32 @@ class SingleFrameNgmixPlugin(SingleFramePlugin):
         if res['flags'] != 0:
             if res['flags'] & LM_SINGULAR_MATRIX:
                 raise MeasurementError(self.flagHandler.getDefinition(
-                    SingleFrameNgmixPlugin.ErrEnum.flag_singularMatrix).doc,
-                    SingleFrameNgmixPlugin.ErrEnum.flag_singularMatrix)
+                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_singularMatrix).doc,
+                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_singularMatrix)
             if res['flags'] & LM_NEG_COV_EIG:
                 raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameNgmixPlugin.ErrEnum.flag_negativeCovEig).doc,
-                    SingleFrameNgmixPlugin.ErrEnum.flag_negativeCovEig)
+                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovEig).doc,
+                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovEig)
             if res['flags'] & LM_NEG_COV_DIAG:
                 raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameNgmixPlugin.ErrEnum.flag_negativeCovDiag).doc,
-                    SingleFrameNgmixPlugin.ErrEnum.flag_negativeCovDiag)
+                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovDiag).doc,
+                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovDiag)
             if res['flags'] & EIG_NOTFINITE:
                 raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameNgmixPlugin.ErrEnum.flag_eigNotFinite).doc,
-                    SingleFrameNgmixPlugin.ErrEnum.flag_eigNotFinite)
+                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_eigNotFinite).doc,
+                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_eigNotFinite)
             if res['flags'] & LM_FUNC_NOTFINITE:
                 raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameNgmixPlugin.ErrEnum.flag_funcNotFinite).doc,
-                    SingleFrameNgmixPlugin.ErrEnum.flag_funcNotFinite)
+                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_funcNotFinite).doc,
+                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_funcNotFinite)
             if res['flags'] & DIV_ZERO:
                 raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameNgmixPlugin.ErrEnum.flag_divZero).doc,
-                    SingleFrameNgmixPlugin.ErrEnum.flag_divZero)
+                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_divZero).doc,
+                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_divZero)
             if res['nfev'] >= self.config.maxfev:
                 raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameNgmixPlugin.ErrEnum.flag_maxFev).doc,
-                    SingleFrameNgmixPlugin.ErrEnum.flag_maxFev)
+                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_maxFev).doc,
+                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_maxFev)
             #   Unknown error, but there should be an errmsg set by ngmix
             raise RuntimeError(res['errmsg'])
 

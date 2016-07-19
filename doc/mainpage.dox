@@ -1,0 +1,68 @@
+// -*- lsst-c++ -*-
+
+namespace lsst { namespace meas { namespace extensions { namespace ngmix {
+/**
+@mainpage lsst::meas::extensions::ngmix;  plugins using ngmix fitters
+This package provides wrappers around certain algorithms in Eric Sheldon's ngmix package.
+The ngmix algorithms do multiple Gaussian fits and return a Gaussian Mixture (GMix).
+The "GMix" object is an additive mixture of Gaussian profiles which can be used
+to model a source or PSF. It will also estimate source ellipticity.
+
+The wrappers allow those algorithms to be accessed from meas_base plugins, and provides
+the standard capabilities for SingleFrameMeasurement, including:
+
+- Initializing the schema of the output SourceCatalog.
+- Providing a measure() method for measuring each input exposure.
+- Writing the measured result to the measRecord provided.
+- Handling errors or unexpected results by setting flags in measRecord.
+
+@section ngmixEMPsfApprox Using EMPsfApprox
+Shape measurement requires a estimate of the PSF for each measured object.
+EMPsfApprox is a wrapper around the ngmix Expectation-Maximization fitter, and is used
+to model the PSF as a GMix. This model can have up to 3 Gaussians, as specified
+with the configuration parameter "nGauss".
+
+The components are stored in measRecord as multiple lsst.shapelet.ShapeletFunction
+components, and can be fetched using a functor key of type
+lsst.shapelet.MultipleShapeletFunctionKey, as shown below:
+@code{.py}
+    name = "meas_extensions_ngmix_EMPsfApprox"
+    msfKey = MultiShapeletFunctionKey(schema[name], lsst.shapelet.HERMITE)
+    multiShapeletFunction = measRecord.get(msfKey)
+@endcode
+
+The number of Gaussians modeled by EMPsfApprox, is set in the plugin config:
+as shown:
+@code{.py}
+    config.plugins["meas_extensions_ngmix.EMPsfApprox"].nGauss = 3
+@endcode
+@section ngmixLMSimpleShape Using LMSimpleShape
+LMSimpleShape is a wrapper around the "simple" Levenberg-Marquardt fitters in ngmix,
+and is used to fit a profile to a source object.
+
+The configuration parameter "model" is used to select the type of fit, and can be
+set to "gauss", "exp", or "dev" (Gaussian, Exponential, or de Vaucouleur's).
+"gauss" returns a single component, while "dev" and "exp" return 6 Gaussian components.
+These are stored in the measRecord, and can be retrieved as a MultipleShapeletFunction.
+
+The plugin also saves the flux, e1, e2, and T=Ixx+Iyy values of the model fit. Please
+see the Readme attached to the ngmix package for clarification about these values,
+which can be calculated by ngmix for any Gaussian mixture.
+
+The LMSimpleShape algorithm is automatically registered when the package
+meas.extensions.ngmix is imported, and may be added to the list of measurement
+algorithms as the follows:
+
+@code{.py}
+        psfPlugin = "meas_extensions_ngmix_EMPsfApprox"
+        shapePlugin = "meas_extensions_ngmix_LMSimpleShape"
+        config.plugins.names = [psfPlugin, shapePlugin]
+        config.plugins[shapePlugin].psfName = psfPlugin
+        config.plugins[psfPlugin].nGauss = 3
+        config.plugins[shapePlugin].model = "exp"
+@endcode
+
+For LMSimpleShape to work well, specify a PSF approximation plugin (psfName).
+The 3 Gaussian EMPsfApprox is used here.
+*/
+}}}} // namespace lsst::meas::extensions::ngmix
