@@ -43,10 +43,13 @@ from lsst.meas.base import FlagDefinition, FlagDefinitionVector, FlagHandler
 import lsst.meas.base.flagDecorator
 
 __all__ = ("SingleFrameEmPsfApproxConfig", "SingleFrameEmPsfApproxPlugin")
-
 class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
+    """
+    nGauss = 1, 2, or 3 is the number of Gaussian used in the fit.
+    nTries, maxItters, and tolerance are inputs to the ngmix EMRunner.
+    """
 
-    nGauss = lsst.pex.config.Field(dtype=int, default=1, optional=False,
+    nGauss = lsst.pex.config.Field(dtype=int, default=3, optional=False,
                                   doc="Number of gaussians")
     nTries = lsst.pex.config.Field(dtype=int, default=10, optional=False,
                                   doc="maximum number of tries with different guesses")
@@ -62,10 +65,11 @@ class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
         ("flag_noPsf", "No PSF attached to the exposure.")
     )
 class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
-    '''
-    Plugin to do Psf Modelling using the ngmix Expectation-Maximization Algorithm.
-    Returns nGauss Gaussians, where nGauss is 1, 2, or 3.
-    '''
+    """
+    Plugin to do Psf modeling using the ngmix Expectation-Maximization Algorithm.
+    Calls the ngmix fitter ngmix.EMRunner with an image of the Psf.
+    Returns nGauss Gaussians stored as lsst.shapelet.ShapeletFunction components. 
+    """
     ConfigClass = SingleFrameEmPsfApproxConfig
 
     gaussian_pars_len = 6
