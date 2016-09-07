@@ -32,7 +32,7 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 import lsst.meas.algorithms as measAlg
 import lsst.meas.base as measBase
-import lsst.meas.base.tests
+from lsst.meas.base.tests import AlgorithmTestCase
 
 import lsst.meas.extensions.ngmix.EMPsfApprox
 
@@ -86,7 +86,7 @@ def makePsf(size, sigma1, mult1, sigma2, mult2):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 
-class EMTestCase(lsst.meas.base.tests.AlgorithmTestCase):
+class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
     """A test case for shape measurement"""
 
     def setUp(self):
@@ -200,5 +200,13 @@ class EMTestCase(lsst.meas.base.tests.AlgorithmTestCase):
         self.assertClose(comp1.getEllipse().getCore().getIyy(), 100.0, rtol=.05)
         self.assertClose(comp1.getEllipse().getCore().getIxy(), 0.0, atol=.1)
 
+class TestMemory(lsst.utils.tests.MemoryTestCase):
+    pass
+
+
+def setup_module(module):
+    lsst.utils.tests.init()
+
 if __name__ == "__main__":
+    lsst.utils.tests.init()
     unittest.main()

@@ -38,7 +38,7 @@ except ImportError:
     modelfit = False
 
 
-class ShapeTestCase(AlgorithmTestCase):
+class testShapeTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
     """A test case for shape measurement"""
 
     def setUp(self):
@@ -207,5 +207,13 @@ class ShapeTestCase(AlgorithmTestCase):
         source, msf = self.runShape(config, self.algName, self.exposure, model='exp')
         self.assertEqual(source.get(self.algName + "_flag"), False)
 
+class TestMemory(lsst.utils.tests.MemoryTestCase):
+    pass
+
+
+def setup_module(module):
+    lsst.utils.tests.init()
+
 if __name__ == "__main__":
+    lsst.utils.tests.init()
     unittest.main()
