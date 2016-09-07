@@ -147,11 +147,11 @@ class ShapeTestCase(AlgorithmTestCase):
         moments1 = msf1.evaluate().computeMoments()
         moments2 = msf2.evaluate().computeMoments()
         self.assertEqual(source.get(self.algName + "_flag"), False)
-        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol = .30)
-        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol = .30)
-        self.assertClose(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol = .30)
-        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol = .1)
-        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol = .1)
+        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol=.30)
+        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol=.30)
+        self.assertClose(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol=.30)
+        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol=.1)
+        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol=.1)
 
     @unittest.skipUnless(modelfit, "Test using ShapeletPsfApprox was not run.")
     def testLMSimpleShapeDoubleGaussian(self):
@@ -164,11 +164,11 @@ class ShapeTestCase(AlgorithmTestCase):
         moments1 = msf1.evaluate().computeMoments()
         moments2 = msf2.evaluate().computeMoments()
         self.assertEqual(source.get(self.algName + "_flag"), False)
-        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol = .30)
-        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol = .30)
-        self.assertClose(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol = .30)
-        self.assertClose(moments1.getCenter().getX(), moments2.getCenter().getX(), atol = .1)
-        self.assertClose(moments1.getCenter().getY(), moments2.getCenter().getY(), atol = .1)
+        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol=.30)
+        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol=.30)
+        self.assertClose(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol=.30)
+        self.assertClose(moments1.getCenter().getX(), moments2.getCenter().getX(), atol=.1)
+        self.assertClose(moments1.getCenter().getY(), moments2.getCenter().getY(), atol=.1)
 
     #   Our only real quantitative test is to test the nGauss=1 EMPsfApprox again the reference.
     def testLMSimpleShapeNGauss1(self):
@@ -177,11 +177,11 @@ class ShapeTestCase(AlgorithmTestCase):
         source, msf1 = self.runReferenceShape(self.exposure)
         moments1 = msf1.evaluate().computeMoments()
         moments2 = msf2.evaluate().computeMoments()
-        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol = .30)
-        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol = .30)
-        self.assertClose(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol = .30)
-        self.assertClose(moments1.getCenter().getX(), moments2.getCenter().getX(), atol = .1)
-        self.assertClose(moments1.getCenter().getY(), moments2.getCenter().getY(), atol = .1)
+        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol=.30)
+        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol=.30)
+        self.assertClose(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol=.30)
+        self.assertClose(moments1.getCenter().getX(), moments2.getCenter().getX(), atol=.1)
+        self.assertClose(moments1.getCenter().getY(), moments2.getCenter().getY(), atol=.1)
 
     #   Just test to be sure this runs without errors
     def testLMSimpleShapeNGauss2(self):

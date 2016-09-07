@@ -50,7 +50,7 @@ class SingleFrameLMSimpleShapeConfig(SingleFramePluginConfig):
     maxfev, ftol, and xtol are runtime parameters sent to ngmix.EMRunner
     '''
     psfName = lsst.pex.config.Field(dtype=str, default=None, optional=False,
-                                    doc = "Field name prefix of the PSF approximation plugin to use")
+                                    doc="Field name prefix of the PSF approximation plugin to use")
 
     model = lsst.pex.config.Field(dtype=str, default="gauss", optional=False,
                                   doc="which LMSimple model to run (gauss, dev, exp")
@@ -64,14 +64,14 @@ class SingleFrameLMSimpleShapeConfig(SingleFramePluginConfig):
 
 @register("meas_extensions_ngmix_LMSimpleShape")
 @lsst.meas.base.flagDecorator.addFlagHandler(("flag", "General Failure error"),
-        ("flag_noPsf", "No PSF attached to the exposure."),
-        ("flag_maxFev", "Maximum function evaluations exceeded"),
-        ("flag_singularMatrix", "Singular Matrix"),
-        ("flag_negativeCovEig", "Negative Covariance Eig"),
-        ("flag_negativeCoveDiag", "Negative Covariance Diag"),
-        ("flag_eigNotFinite", "Eig not finite"),
-        ("flag_funcNotFinite", "Func not finite"),
-        ("flag_divideByZero", "Divide by Zero"))
+                                             ("flag_noPsf", "No PSF attached to the exposure."),
+                                             ("flag_maxFev", "Maximum function evaluations exceeded"),
+                                             ("flag_singularMatrix", "Singular Matrix"),
+                                             ("flag_negativeCovEig", "Negative Covariance Eig"),
+                                             ("flag_negativeCoveDiag", "Negative Covariance Diag"),
+                                             ("flag_eigNotFinite", "Eig not finite"),
+                                             ("flag_funcNotFinite", "Func not finite"),
+                                             ("flag_divideByZero", "Divide by Zero"))
 class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
     '''
     Plugin to do shape measurement using ngmix Levenberg-Marquardt fitters
@@ -150,7 +150,8 @@ class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
             shape = psfArray.shape
             image = lsst.afw.image.ImageD(shape[1], shape[0])
             evaluate = measRecord.get(self.psfMsfKey).evaluate()
-            evaluate.addToImage(image.getArray(), lsst.afw.geom.Point2I(-(shape[0] - 1)//2, -(shape[1] - 1)//2))
+            evaluate.addToImage(image.getArray(),
+                                lsst.afw.geom.Point2I(-(shape[0] - 1)//2, -(shape[1] - 1)//2))
             psfObs = Observation(image.getArray(), jacobian=psfJacob)
             #   Now create a gmix directly from what the PsfApprox algorithm produced
             multiShapeletFunction = measRecord.get(self.psfMsfKey)
@@ -190,13 +191,12 @@ class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
 
         #   Now run the shape algorithm, using the config parameters
         lmPars = {'maxfev': self.config.maxfev, 'ftol': self.config.ftol, 'xtol': self.config.xtol}
-        maxPars = {'method':'lm', 'lm_pars':lmPars}
+        maxPars = {'method': 'lm', 'lm_pars': lmPars}
         guesser = ngmix.guessers.TFluxGuesser(xx+yy, flux)
         runner = ngmix.bootstrap.MaxRunner(obs, self.config.model, maxPars, guesser)
         runner.go(ntry=4)
         fitter = runner.fitter
         res = fitter.get_result()
-
 
         #   Set the results, including the fit info returned by MaxRunner
         if res['flags'] != 0:
@@ -205,20 +205,23 @@ class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
                     SingleFrameLMSimpleShapePlugin.ErrEnum.flag_singularMatrix).doc,
                     SingleFrameLMSimpleShapePlugin.ErrEnum.flag_singularMatrix)
             if res['flags'] & LM_NEG_COV_EIG:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovEig).doc,
-                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovEig)
+                raise MeasurementError(self.flagHandler.getDefinition(
+                                           SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovEig).doc,
+                                       SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovEig)
             if res['flags'] & LM_NEG_COV_DIAG:
                 raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovDiag).doc,
+                    self.flagHandler.getDefinition(
+                        SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovDiag).doc,
                     SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovDiag)
             if res['flags'] & EIG_NOTFINITE:
                 raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_eigNotFinite).doc,
+                    self.flagHandler.getDefinition(
+                        SingleFrameLMSimpleShapePlugin.ErrEnum.flag_eigNotFinite).doc,
                     SingleFrameLMSimpleShapePlugin.ErrEnum.flag_eigNotFinite)
             if res['flags'] & LM_FUNC_NOTFINITE:
                 raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_funcNotFinite).doc,
+                    self.flagHandler.getDefinition(
+                        SingleFrameLMSimpleShapePlugin.ErrEnum.flag_funcNotFinite).doc,
                     SingleFrameLMSimpleShapePlugin.ErrEnum.flag_funcNotFinite)
             if res['flags'] & DIV_ZERO:
                 raise MeasurementError(
@@ -235,7 +238,6 @@ class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
         #   There are always 6 parameters for each Gaussian.
         galGMix = fitter.get_gmix()
         galPars = galGMix.get_full_pars()
-
 
         # convert the center in row,col coordinates to pixel coordinates and save
         cen = galGMix.get_cen()
