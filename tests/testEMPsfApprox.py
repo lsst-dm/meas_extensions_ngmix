@@ -193,13 +193,13 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         #  We are not looking for really close matches in this unit test, which is why
         #  the tolerances are set rather large.  Really just a check that we are getting
         #  some kind of reasonable value for the fit.  A more quantitative test may be needed.
-        self.assertClose(flux0/flux1, 7.0/3.0, rtol=.05)
-        self.assertClose(comp0.getEllipse().getCore().getIxx(), 16.0, rtol=.05)
-        self.assertClose(comp0.getEllipse().getCore().getIyy(), 16.0, rtol=.05)
-        self.assertClose(comp0.getEllipse().getCore().getIxy(), 0.0, atol=.1)
-        self.assertClose(comp1.getEllipse().getCore().getIxx(), 100.0, rtol=.05)
-        self.assertClose(comp1.getEllipse().getCore().getIyy(), 100.0, rtol=.05)
-        self.assertClose(comp1.getEllipse().getCore().getIxy(), 0.0, atol=.1)
+        self.assertFloatsAlmostEqual(flux0/flux1, 7.0/3.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp0.getEllipse().getCore().getIxx(), 16.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp0.getEllipse().getCore().getIyy(), 16.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp0.getEllipse().getCore().getIxy(), 0.0, atol=.1)
+        self.assertFloatsAlmostEqual(comp1.getEllipse().getCore().getIxx(), 100.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp1.getEllipse().getCore().getIyy(), 100.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp1.getEllipse().getCore().getIxy(), 0.0, atol=.1)
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass
