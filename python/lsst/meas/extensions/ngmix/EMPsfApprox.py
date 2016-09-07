@@ -24,6 +24,7 @@
 Definitions and registration of pure-Python plugins with trivial implementations,
 and automatic plugin-from-algorithm calls for those implemented in C++.
 """
+from builtins import range
 import numpy
 import ngmix
 from ngmix.bootstrap import EMRunner

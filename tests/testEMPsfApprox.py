@@ -1,3 +1,4 @@
+from builtins import range
 # LSST Data Management System
 # Copyright 2008-2015 AURA/LSST
 #
@@ -46,8 +47,8 @@ def makeGaussianArray(size, sigma, xc=None, yc=None):
         yc = (size-1)/2.0
     image = afwImage.ImageD(afwGeom.Box2I(afwGeom.Point2I(0, 0), afwGeom.Point2I(size, size)))
     array = np.ndarray(shape=(size, size), dtype=np.float64)
-    for yi, yv in enumerate(xrange(0, size)):
-        for xi, xv in enumerate(xrange(0, size)):
+    for yi, yv in enumerate(range(0, size)):
+        for xi, xv in enumerate(range(0, size)):
             array[yi, xi] = np.exp(-0.5*((xv - xc)**2 + (yv - yc)**2)/sigma**2)
     array /= array.sum()
     return array
