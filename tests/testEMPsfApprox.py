@@ -37,10 +37,10 @@ from lsst.meas.base.tests import AlgorithmTestCase
 
 import lsst.meas.extensions.ngmix.EMPsfApprox
 
-#   Create an array of size x size containing a 2D circular Gaussian of size sigma.  Normalized to 1.0
-
-
 def makeGaussianArray(size, sigma, xc=None, yc=None):
+    """
+    Create an array of size x size containing a 2D circular Gaussian of size sigma.  Normalized to 1.0
+    """
     if xc == None:
         xc = (size-1)/2.0
     if yc == None:
@@ -53,10 +53,10 @@ def makeGaussianArray(size, sigma, xc=None, yc=None):
     array /= array.sum()
     return array
 
-#   Run a measurement task which has previously been initialized on a single source
-
-
 def runMeasure(task, schema, exposure):
+    """
+    Run a measurement task which has previously been initialized on a single source
+    """
     cat = afwTable.SourceCatalog(schema)
     source = cat.addNew()
     dettask = measAlg.SourceDetectionTask()
@@ -73,18 +73,16 @@ def runMeasure(task, schema, exposure):
     task.run(exposure, cat)
     return source
 
-#   make a Gaussian with one or two components.  Always square of dimensions size x size
-
-
 def makePsf(size, sigma1, mult1, sigma2, mult2):
+    """
+    make a Gaussian with one or two components.  Always square of dimensions size x size
+    """
     array0 = makeGaussianArray(size, sigma1)
     array0 *= mult1
     array1 = makeGaussianArray(size, sigma2)
     array1 *= mult2
     kernel = lsst.afw.math.FixedKernel(lsst.afw.image.ImageD(array0 + array1))
     return measAlg.KernelPsf(kernel)
-
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 
 class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
