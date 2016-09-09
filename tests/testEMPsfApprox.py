@@ -1,3 +1,4 @@
+from builtins import range
 # LSST Data Management System
 # Copyright 2008-2015 AURA/LSST
 #
@@ -32,44 +33,50 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 import lsst.meas.algorithms as measAlg
 import lsst.meas.base as measBase
-import lsst.meas.base.tests
+from lsst.meas.base.tests import AlgorithmTestCase
 
 import lsst.meas.extensions.ngmix.EMPsfApprox
 
-#   Create an array of size x size containing a 2D circular Gaussian of size sigma.  Normalized to 1.0
 def makeGaussianArray(size, sigma, xc=None, yc=None):
+    """
+    Create an array of size x size containing a 2D circular Gaussian of size sigma.  Normalized to 1.0
+    """
     if xc == None:
         xc = (size-1)/2.0
     if yc == None:
         yc = (size-1)/2.0
-    image = afwImage.ImageD(afwGeom.Box2I(afwGeom.Point2I(0,0), afwGeom.Point2I(size,size)))
-    array = np.ndarray(shape = (size, size), dtype = np.float64)
-    for yi, yv in enumerate(xrange(0, size)):
-        for xi, xv in enumerate(xrange(0, size)):
+    image = afwImage.ImageD(afwGeom.Box2I(afwGeom.Point2I(0, 0), afwGeom.Point2I(size, size)))
+    array = np.ndarray(shape=(size, size), dtype=np.float64)
+    for yi, yv in enumerate(range(0, size)):
+        for xi, xv in enumerate(range(0, size)):
             array[yi, xi] = np.exp(-0.5*((xv - xc)**2 + (yv - yc)**2)/sigma**2)
     array /= array.sum()
     return array
 
-#   Run a measurement task which has previously been initialized on a single source
 def runMeasure(task, schema, exposure):
+    """
+    Run a measurement task which has previously been initialized on a single source
+    """
     cat = afwTable.SourceCatalog(schema)
     source = cat.addNew()
     dettask = measAlg.SourceDetectionTask()
 
     # Suppress non-essential task output.
-    dettask.log.setThreshold(dettask.log.WARN)
+    dettask.log.setLevel(dettask.log.WARN)
 
     # We are expecting this task to log an error. Suppress it, so that it
     # doesn't appear on the console or in logs, and incorrectly cause the user
     # to assume a failure.
-    task.log.setThreshold(task.log.FATAL)
+    task.log.setLevel(task.log.FATAL)
     footprints = dettask.detectFootprints(exposure, sigma=4.0).positive.getFootprints()
     source.setFootprint(footprints[0])
     task.run(exposure, cat)
     return source
 
-#   make a Gaussian with one or two components.  Always square of dimensions size x size
 def makePsf(size, sigma1, mult1, sigma2, mult2):
+    """
+    make a Gaussian with one or two components.  Always square of dimensions size x size
+    """
     array0 = makeGaussianArray(size, sigma1)
     array0 *= mult1
     array1 = makeGaussianArray(size, sigma2)
@@ -77,9 +84,8 @@ def makePsf(size, sigma1, mult1, sigma2, mult2):
     kernel = lsst.afw.math.FixedKernel(lsst.afw.image.ImageD(array0 + array1))
     return measAlg.KernelPsf(kernel)
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-class EMTestCase(lsst.meas.base.tests.AlgorithmTestCase):
+class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
     """A test case for shape measurement"""
 
     def setUp(self):
@@ -174,10 +180,10 @@ class EMTestCase(lsst.meas.base.tests.AlgorithmTestCase):
         msf = source.get(self.msfKey)
         components = msf.getComponents()
         self.assertEqual(len(components), 2)
-        comp0 = components[0]  
+        comp0 = components[0]
         comp1 = components[1]
-        flux0 = comp0.getCoefficients()[0]  
-        flux1 = comp1.getCoefficients()[0]  
+        flux0 = comp0.getCoefficients()[0]
+        flux1 = comp1.getCoefficients()[0]
         if flux0 < flux1:
             temp = comp1
             comp1 = comp0
@@ -185,13 +191,21 @@ class EMTestCase(lsst.meas.base.tests.AlgorithmTestCase):
         #  We are not looking for really close matches in this unit test, which is why
         #  the tolerances are set rather large.  Really just a check that we are getting
         #  some kind of reasonable value for the fit.  A more quantitative test may be needed.
-        self.assertClose(flux0/flux1, 7.0/3.0, rtol = .05)
-        self.assertClose(comp0.getEllipse().getCore().getIxx(), 16.0, rtol = .05)
-        self.assertClose(comp0.getEllipse().getCore().getIyy(), 16.0, rtol = .05)
-        self.assertClose(comp0.getEllipse().getCore().getIxy(), 0.0, atol = .1)
-        self.assertClose(comp1.getEllipse().getCore().getIxx(), 100.0, rtol = .05)
-        self.assertClose(comp1.getEllipse().getCore().getIyy(), 100.0, rtol = .05)
-        self.assertClose(comp1.getEllipse().getCore().getIxy(), 0.0, atol = .1)
+        self.assertFloatsAlmostEqual(flux0/flux1, 7.0/3.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp0.getEllipse().getCore().getIxx(), 16.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp0.getEllipse().getCore().getIyy(), 16.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp0.getEllipse().getCore().getIxy(), 0.0, atol=.1)
+        self.assertFloatsAlmostEqual(comp1.getEllipse().getCore().getIxx(), 100.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp1.getEllipse().getCore().getIyy(), 100.0, rtol=.05)
+        self.assertFloatsAlmostEqual(comp1.getEllipse().getCore().getIxy(), 0.0, atol=.1)
+
+class TestMemory(lsst.utils.tests.MemoryTestCase):
+    pass
+
+
+def setup_module(module):
+    lsst.utils.tests.init()
 
 if __name__ == "__main__":
+    lsst.utils.tests.init()
     unittest.main()

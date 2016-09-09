@@ -38,7 +38,7 @@ except ImportError:
     modelfit = False
 
 
-class ShapeTestCase(AlgorithmTestCase):
+class testShapeTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
     """A test case for shape measurement"""
 
     def setUp(self):
@@ -147,11 +147,11 @@ class ShapeTestCase(AlgorithmTestCase):
         moments1 = msf1.evaluate().computeMoments()
         moments2 = msf2.evaluate().computeMoments()
         self.assertEqual(source.get(self.algName + "_flag"), False)
-        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol = .30)
-        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol = .30)
-        self.assertClose(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol = .30)
-        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol = .1)
-        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol = .1)
+        self.assertFloatsAlmostEqual(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol=.30)
+        self.assertFloatsAlmostEqual(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol=.30)
+        self.assertFloatsAlmostEqual(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol=.30)
+        self.assertFloatsAlmostEqual(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol=.1)
+        self.assertFloatsAlmostEqual(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol=.1)
 
     @unittest.skipUnless(modelfit, "Test using ShapeletPsfApprox was not run.")
     def testLMSimpleShapeDoubleGaussian(self):
@@ -164,33 +164,20 @@ class ShapeTestCase(AlgorithmTestCase):
         moments1 = msf1.evaluate().computeMoments()
         moments2 = msf2.evaluate().computeMoments()
         self.assertEqual(source.get(self.algName + "_flag"), False)
-        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol = .30)
-        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol = .30)
-        self.assertClose(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol = .30)
-        self.assertClose(moments1.getCenter().getX(), moments2.getCenter().getX(), atol = .1)
-        self.assertClose(moments1.getCenter().getY(), moments2.getCenter().getY(), atol = .1)
-
-    #   Our only real quantitative test is to test the nGauss=1 EMPsfApprox again the reference.
-    def testLMSimpleShapeNGauss1(self):
-        config = self.makeConfig(self.algName, psfName='meas_extensions_ngmix_EMPsfApprox', nGauss=1)
-        source, msf2 = self.runShape(config, self.algName, self.exposure, model='gauss')
-        source, msf1 = self.runReferenceShape(self.exposure)
-        moments1 = msf1.evaluate().computeMoments()
-        moments2 = msf2.evaluate().computeMoments()
-        self.assertClose(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol = .30)
-        self.assertClose(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol = .30)
-        self.assertClose(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol = .30)
-        self.assertClose(moments1.getCenter().getX(), moments2.getCenter().getX(), atol = .1)
-        self.assertClose(moments1.getCenter().getY(), moments2.getCenter().getY(), atol = .1)
+        self.assertFloatsAlmostEqual(moments1.getCore().getIxx(), moments2.getCore().getIxx(), atol=.30)
+        self.assertFloatsAlmostEqual(moments1.getCore().getIxy(), moments2.getCore().getIxy(), atol=.30)
+        self.assertFloatsAlmostEqual(moments1.getCore().getIyy(), moments2.getCore().getIyy(), atol=.30)
+        self.assertFloatsAlmostEqual(moments1.getCenter().getX(), moments2.getCenter().getX(), atol=.1)
+        self.assertFloatsAlmostEqual(moments1.getCenter().getY(), moments2.getCenter().getY(), atol=.1)
 
     #   Just test to be sure this runs without errors
-    def testLMSimpleShapeNGauss2(self):
+    def testLMSimpleShapeNGauss1(self):
         config = self.makeConfig(self.algName, psfName='meas_extensions_ngmix_EMPsfApprox', nGauss=2)
         source, msf = self.runShape(config, self.algName, self.exposure, model='gauss')
         self.assertEqual(source.get(self.algName + "_flag"), False)
 
     #   Just test to be sure this runs without errors
-    def testLMSimpleShapeNGauss3(self):
+    def testLMSimpleShapeNGauss2(self):
         config = self.makeConfig(self.algName, psfName='meas_extensions_ngmix_EMPsfApprox', nGauss=3)
         source, msf = self.runShape(config, self.algName, self.exposure, model='gauss')
         self.assertEqual(source.get(self.algName + "_flag"), False)
@@ -207,5 +194,13 @@ class ShapeTestCase(AlgorithmTestCase):
         source, msf = self.runShape(config, self.algName, self.exposure, model='exp')
         self.assertEqual(source.get(self.algName + "_flag"), False)
 
+class TestMemory(lsst.utils.tests.MemoryTestCase):
+    pass
+
+
+def setup_module(module):
+    lsst.utils.tests.init()
+
 if __name__ == "__main__":
+    lsst.utils.tests.init()
     unittest.main()

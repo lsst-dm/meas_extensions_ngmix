@@ -24,6 +24,7 @@
 Definitions and registration of pure-Python plugins with trivial implementations,
 and automatic plugin-from-algorithm calls for those implemented in C++.
 """
+from builtins import range
 import numpy
 import ngmix
 from ngmix.bootstrap import EMRunner
@@ -43,6 +44,8 @@ from lsst.meas.base import FlagDefinition, FlagDefinitionVector, FlagHandler
 import lsst.meas.base.flagDecorator
 
 __all__ = ("SingleFrameEmPsfApproxConfig", "SingleFrameEmPsfApproxPlugin")
+
+
 class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
     """
     nGauss = 1, 2, or 3 is the number of Gaussian used in the fit.
@@ -50,25 +53,27 @@ class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
     """
 
     nGauss = lsst.pex.config.Field(dtype=int, default=3, optional=False,
-                                  doc="Number of gaussians")
+                                   doc="Number of gaussians")
     nTries = lsst.pex.config.Field(dtype=int, default=10, optional=False,
-                                  doc="maximum number of tries with different guesses")
+                                   doc="maximum number of tries with different guesses")
     maxIters = lsst.pex.config.Field(dtype=int, default=10000, optional=False,
-                                  doc="maximum number of iterations")
+                                     doc="maximum number of iterations")
     tolerance = lsst.pex.config.Field(dtype=float, default=1e-6, optional=False,
-                                  doc="tolerance")
+                                      doc="tolerance")
+
 
 @register("meas_extensions_ngmix_EMPsfApprox")
 @lsst.meas.base.flagDecorator.addFlagHandler(("flag", "General Failure error"),
-        ("flag_rangeError", "Iteration error in Gaussian parameters."),
-        ("flag_maxIters", "Fitter exceeded maxIters setting without converging."),
-        ("flag_noPsf", "No PSF attached to the exposure.")
-    )
+                                             ("flag_rangeError", "Iteration error in Gaussian parameters."),
+                                             ("flag_maxIters",
+                                              "Fitter exceeded maxIters setting without converging."),
+                                             ("flag_noPsf", "No PSF attached to the exposure.")
+                                             )
 class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
     """
     Plugin to do Psf modeling using the ngmix Expectation-Maximization Algorithm.
     Calls the ngmix fitter ngmix.EMRunner with an image of the Psf.
-    Returns nGauss Gaussians stored as lsst.shapelet.ShapeletFunction components. 
+    Returns nGauss Gaussians stored as lsst.shapelet.ShapeletFunction components.
     """
     ConfigClass = SingleFrameEmPsfApproxConfig
 
@@ -88,8 +93,9 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
         self.keys = []
         for i in range(config.nGauss):
             key = lsst.shapelet.ShapeletFunctionKey.addFields(schema,
-                  "%s_%d"%(name, i), "ngmix EM gaussian", "pixels", "",
-                  0, lsst.shapelet.HERMITE)
+                                                             "%s_%d"%(name, i),
+                                                             "ngmix EM gaussian", "pixels", "",
+                                                              0, lsst.shapelet.HERMITE)
             self.keys.append(key)
         self.msfKey = lsst.shapelet.MultiShapeletFunctionKey(self.keys)
 
@@ -106,12 +112,12 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
         nGauss = self.config.nGauss
         shape = exposure.getPsf().computeShape()
         Tguess = shape.getIxx() + shape.getIyy()
-        emPars={'maxiter':self.config.maxIters, 'tol':self.config.tolerance}
+        emPars = {'maxiter': self.config.maxIters, 'tol': self.config.tolerance}
 
-        runner=EMRunner(psfObs, Tguess, nGauss, emPars)
+        runner = EMRunner(psfObs, Tguess, nGauss, emPars)
         runner.go(ntry=self.config.nTries)
-        fitter=runner.get_fitter()
-        res=fitter.get_result()
+        fitter = runner.get_fitter()
+        res = fitter.get_result()
 
         #   Set the results, including the fit info returned by EMRunner
         measRecord.set(self.iterKey, res['numiter'])
@@ -136,7 +142,7 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
         for i in range(self.config.nGauss):
             flux, y, x, iyy, ixy, ixx = psf_pars[i*self.gaussian_pars_len: (i+1)*self.gaussian_pars_len]
             quad = lsst.afw.geom.ellipses.Quadrupole(ixx, iyy, ixy)
-            ellipse = lsst.afw.geom.ellipses.Ellipse(quad, lsst.afw.geom.Point2D(x,y))
+            ellipse = lsst.afw.geom.ellipses.Ellipse(quad, lsst.afw.geom.Point2D(x, y))
             # create a 0th order (gaussian) shapelet function.
             sf = lsst.shapelet.ShapeletFunction(0, lsst.shapelet.HERMITE, ellipse)
             sf.getCoefficients()[0] = flux/lsst.shapelet.ShapeletFunction.FLUX_FACTOR
