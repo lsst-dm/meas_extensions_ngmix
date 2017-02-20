@@ -100,7 +100,7 @@ class testShapeTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         source = cat.addNew()
         source.setFootprint(fpSet.getFootprints()[0])
 
-        task.run(exposure, cat)
+        task.run(cat, exposure)
         if source.get(self.algName + "_flag"):
             return source, None
         self.msfKey = lsst.shapelet.MultiShapeletFunctionKey(source.getSchema()[algName],

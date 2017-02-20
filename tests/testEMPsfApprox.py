@@ -70,7 +70,7 @@ def runMeasure(task, schema, exposure):
     task.log.setLevel(task.log.FATAL)
     footprints = dettask.detectFootprints(exposure, sigma=4.0).positive.getFootprints()
     source.setFootprint(footprints[0])
-    task.run(exposure, cat)
+    task.run(cat, exposure)
     return source
 
 def makePsf(size, sigma1, mult1, sigma2, mult2):
