@@ -35,8 +35,8 @@ import lsst.afw.detection
 import lsst.afw.geom
 from lsst.meas.base.pluginRegistry import register
 from lsst.meas.base.sfm import SingleFramePluginConfig, SingleFramePlugin
-from lsst.meas.base.baseLib import MeasurementError
-import lsst.meas.base.flagDecorator
+from lsst.meas.base import MeasurementError
+from lsst.meas.base import FlagDefinition, FlagDefinitionList, FlagHandler
 from lsst.shapelet import ShapeletFunction, ShapeletFunctionKey, MultiShapeletFunctionKey, HERMITE
 
 __all__ = ("SingleFrameLMSimpleShapeConfig", "SingleFrameLMSimpleShapePlugin")
@@ -64,15 +64,6 @@ class SingleFrameLMSimpleShapeConfig(SingleFramePluginConfig):
 
 
 @register("meas_extensions_ngmix_LMSimpleShape")
-@lsst.meas.base.flagDecorator.addFlagHandler(("flag", "General Failure error"),
-                                             ("flag_noPsf", "No PSF attached to the exposure."),
-                                             ("flag_maxFev", "Maximum function evaluations exceeded"),
-                                             ("flag_singularMatrix", "Singular Matrix"),
-                                             ("flag_negativeCovEig", "Negative Covariance Eig"),
-                                             ("flag_negativeCoveDiag", "Negative Covariance Diag"),
-                                             ("flag_eigNotFinite", "Eig not finite"),
-                                             ("flag_funcNotFinite", "Func not finite"),
-                                             ("flag_divideByZero", "Divide by Zero"))
 class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
     '''
     Plugin to do shape measurement using ngmix Levenberg-Marquardt fitters
@@ -105,6 +96,17 @@ class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
 
     def __init__(self, config, name, schema, metadata):
         SingleFramePlugin.__init__(self, config, name, schema, metadata)
+        flagDefs = FlagDefinitionList()
+        flagDefs.addFailureFlag()
+        self.noPsf = flagDefs.add("flag_noPsf", "No PSF attached to the exposure.")
+        self.maxFev = flagDefs.add("flag_maxFev", "Maximum function evaluations exceeded")
+        self.singularMatrix = flagDefs.add("flag_singularMatrix", "Singular Matrix")
+        self.negativeCovEig = flagDefs.add("flag_negativeCovEig", "Negative Covariance Eig")
+        self.negativeCoveDiag = flagDefs.add("flag_negativeCoveDiag", "Negative Covariance Diag")
+        self.eigNotFinite = flagDefs.add("flag_eigNotFinite", "Eig not finite")
+        self.funcNotFinite = flagDefs.add("flag_funcNotFinite", "Func not finite")
+        self.divideByZero = flagDefs.add("flag_divideByZero", "Divide by Zero")
+        self.flagHandler = FlagHandler.addFields(schema, name, flagDefs)
 
         self.xKey = schema.addField(name + "_x", type="D", doc="x centroid of model fit", units="")
         self.yKey = schema.addField(name + "_y", type="D", doc="y centroid of model fit", units="")
@@ -132,9 +134,7 @@ class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
     def measure(self, measRecord, exposure):
         psf = exposure.getPsf()
         if psf is None:
-            raise MeasurementError(self.flagHandler.getDefinition(
-                                   SingleFrameLMSimpleShapePlugin.ErrEnum.flag_noPsf).doc,
-                                   SingleFrameLMSimpleShapePlugin.ErrEnum.flag_noPsf)
+            raise MeasurementError(self.noPsf.doc, self.noPsf.number)
         # make an observation for the psf image
         psfArray = psf.computeKernelImage().getArray()
         psfJacob = ngmix.UnitJacobian(row=psfArray.shape[0]/2.0, col=psfArray.shape[1]/2.0)
@@ -202,36 +202,19 @@ class SingleFrameLMSimpleShapePlugin(SingleFramePlugin):
         #   Set the results, including the fit info returned by MaxRunner
         if res['flags'] != 0:
             if res['flags'] & LM_SINGULAR_MATRIX:
-                raise MeasurementError(self.flagHandler.getDefinition(
-                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_singularMatrix).doc,
-                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_singularMatrix)
+                raise MeasurementError(self.singularMatrix.doc, self.singularMatrix.number)
             if res['flags'] & LM_NEG_COV_EIG:
-                raise MeasurementError(self.flagHandler.getDefinition(
-                                           SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovEig).doc,
-                                       SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovEig)
+                raise MeasurementError(self.negativeCovEig.doc, self.negativeCovEig.number)
             if res['flags'] & LM_NEG_COV_DIAG:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(
-                        SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovDiag).doc,
-                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_negativeCovDiag)
+                raise MeasurementError(self.negativeCovDiag.doc, self.negativeCovDiag.number)
             if res['flags'] & EIG_NOTFINITE:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(
-                        SingleFrameLMSimpleShapePlugin.ErrEnum.flag_eigNotFinite).doc,
-                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_eigNotFinite)
+                raise MeasurementError(self.eigNotFinite.doc, self.eigNotFinite.number)
             if res['flags'] & LM_FUNC_NOTFINITE:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(
-                        SingleFrameLMSimpleShapePlugin.ErrEnum.flag_funcNotFinite).doc,
-                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_funcNotFinite)
+                raise MeasurementError(self.funcNotFinite.doc, self.funcNotFinite.number)
             if res['flags'] & DIV_ZERO:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_divZero).doc,
-                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_divZero)
+                raise MeasurementError(self.divZero.doc, self.divZero.number)
             if res['nfev'] >= self.config.maxfev:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameLMSimpleShapePlugin.ErrEnum.flag_maxFev).doc,
-                    SingleFrameLMSimpleShapePlugin.ErrEnum.flag_maxFev)
+                raise MeasurementError(self.maxFev.doc, self.maxFev.number)
             #   Unknown error, but there should be an errmsg set by ngmix
             raise RuntimeError(res['errmsg'])
 

@@ -39,9 +39,8 @@ import lsst.shapelet
 
 from lsst.meas.base.pluginRegistry import register
 from lsst.meas.base.sfm import SingleFramePluginConfig, SingleFramePlugin
-from lsst.meas.base.baseLib import MeasurementError
-from lsst.meas.base import FlagDefinition, FlagDefinitionVector, FlagHandler
-import lsst.meas.base.flagDecorator
+from lsst.meas.base import MeasurementError
+from lsst.meas.base import FlagDefinition, FlagDefinitionList, FlagHandler
 
 __all__ = ("SingleFrameEmPsfApproxConfig", "SingleFrameEmPsfApproxPlugin")
 
@@ -63,12 +62,6 @@ class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
 
 
 @register("meas_extensions_ngmix_EMPsfApprox")
-@lsst.meas.base.flagDecorator.addFlagHandler(("flag", "General Failure error"),
-                                             ("flag_rangeError", "Iteration error in Gaussian parameters."),
-                                             ("flag_maxIters",
-                                              "Fitter exceeded maxIters setting without converging."),
-                                             ("flag_noPsf", "No PSF attached to the exposure.")
-                                             )
 class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
     """
     Plugin to do Psf modeling using the ngmix Expectation-Maximization Algorithm.
@@ -85,9 +78,15 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
 
     def __init__(self, config, name, schema, metadata):
         SingleFramePlugin.__init__(self, config, name, schema, metadata)
+        flagDefs = FlagDefinitionList()
+        flagDefs.addFailureFlag()
+        self.rangeError = flagDefs.add("flag_rangeError", "Iteration error in Gaussian parameters.")
+        self.maxIters = flagDefs.add("flag_maxIters", "Fitter exceeded maxIters setting without converging.")
+        self.noPsf = flagDefs.add("flag_noPsf", "No PSF attached to the exposure.")
+        self.flagHandler = FlagHandler.addFields(schema, name, flagDefs)
 
-        self.iterKey = schema.addField(name + '_iterations', type=int, doc="number of iterations run")
-        self.fdiffKey = schema.addField(name + '_fdiff', type=float, doc="fit difference")
+        self.iterKey = schema.addField(name + '_iterations', type='I', doc="number of iterations run")
+        self.fdiffKey = schema.addField(name + '_fdiff', type='D', doc="fit difference")
 
         # Add ShapeletFunction keys for the number of Gaussians requested
         self.keys = []
@@ -101,9 +100,7 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
 
     def measure(self, measRecord, exposure):
         if exposure.getPsf() is None:
-            raise MeasurementError(
-                self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_noPsf).doc,
-                SingleFrameEmPsfApproxPlugin.ErrEnum.flag_noPsf)
+            raise MeasurementError(self.noPsf.doc, self.noPsf.number)
         psfArray = exposure.getPsf().computeKernelImage().getArray()
         psfObs = ngmix.observation.Observation(psfArray,
             jacobian=ngmix.UnitJacobian(row=(psfArray.shape[0]-1)/2, col=(psfArray.shape[1]-1)/2))
@@ -126,13 +123,9 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
         #   We only know about two EM errors.  Anything else is thrown as "unknown".
         if res['flags'] != 0:
             if res['flags'] & EM_RANGE_ERROR:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_rangeError).doc,
-                    SingleFrameEmPsfApproxPlugin.ErrEnum.flag_rangeError)
+                raise MeasurementError(self.rangeError.doc, self.rangeError.number)
             if res['flags'] & EM_MAXITER:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_maxIters).doc,
-                    SingleFrameEmPsfApproxPlugin.ErrEnum.flag_maxIters)
+                raise MeasurementError(self.maxIters.doc, self.maxIters.number)
             raise RuntimeError("Unknown EM fitter exception")
 
         #   Convert the nGauss Gaussians to ShapeletFunction's.  Zeroth order HERMITES are Gaussians.
