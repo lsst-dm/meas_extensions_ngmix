@@ -35,6 +35,9 @@ class ProcessCoaddsNgMixConfig(ProcessCoaddsTogetherConfig):
     # TODO: add config fields here, e.g.:
     maxIter = Field(dtype=int, doc="Maximum number of iterations", default=100, optional=False)
 
+    def setDefaults(self):
+        self.output.name = "deepCoadd_ngmix"
+
 
 class ProcessCoaddsNgMixTask(ProcessCoaddsTogetherTask):
     _DefaultName = "processCoaddsNgMix"
@@ -116,7 +119,7 @@ class ProcessCoaddsNgMixTask(ProcessCoaddsTogetherTask):
             data = {}
             psfs = {}
             xy0 = None
-            for filt in self.filters:
+            for filt in self.config.filters:
                 # TODO: run noise replacers here
                 data[filt] = images[filt].image.array
                 psfs[filt] = images[filt].getPsf().computeKernelImage().array
@@ -154,6 +157,14 @@ class ProcessCoaddsNgMixTask(ProcessCoaddsTogetherTask):
             Dictionary of image data arrays, keyed by filter name.
         psfs: `dict` of `{str: numpy.ndarray}`
             Dictionary of PSF images, keyed by filter name.
+
+        Returns
+        -------
+        results : `dict`
+            Dictionary of outputs, with keys matching the fields added in
+            `defineSchema()`.
         """
 
         # TODO: real work goes here
+
+        return {}

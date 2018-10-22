@@ -30,7 +30,7 @@ from lsst.pipe.base import (
 from lsst.pex.config import Config
 
 from lsst.coadd.utils.coaddDataIdContainer import ExistingCoaddDataIdContainer
-from lsst.pipe.tasks.multiBand import DeblendCoaddSourcesRunner, getShortFilterName
+from lsst.pipe.tasks.multiBand import MergeSourcesRunner, getShortFilterName
 
 
 __all__ = ("ProcessCoaddsTogetherConfig", "ProcessCoaddsTogetherTask")
@@ -69,7 +69,7 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
 
     # This feeds the runDataRef() method all bands at once, rather than each one separately.
     # The name reflects how it's used elsewhere, not what it does
-    RunnerClass = DeblendCoaddSourcesRunner
+    RunnerClass = MergeSourcesRunner
 
     # TODO: override DatasetType introspection for PipelineTask.  Probably
     # blocked on DM-16275.
@@ -95,7 +95,7 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
                 if refSchema is None:
                     refSchema = SourceCatalog.Table.makeMinimalSchema()
             else:
-                refSchema = butler.get(self.config.ref.name + "_schema")
+                refSchema = butler.get(self.config.ref.name + "_schema").schema
         self.schema = self.defineSchema(refSchema)
 
     def getInitOutputDatasets(self):
@@ -104,7 +104,7 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
 
     def getSchemaCatalogs(self):
         # Customize schema dataset retrieval for CmdLineTask
-        return {self.config.output.name + "_schema": SourceCatalog(self.schema)}
+        return {self.config.output.name: SourceCatalog(self.schema)}
 
     def _getConfigName(self):
         # Config writing with CmdLineTask is disabled for this class.

@@ -6,3 +6,4 @@ setupRequired(pipe_tasks)
 setupRequired(ngmix)
 
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
+envPrepend(PATH, ${PRODUCT_DIR}/bin)
