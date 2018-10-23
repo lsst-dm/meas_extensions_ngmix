@@ -34,6 +34,24 @@ from pprint import pprint
 
 #__all__ = ("ProcessCoaddsNGMixConfig", "ProcessCoaddsNGMixTask")
 
+class MaxConfig(Config):
+    ntry = Field(
+        dtype=int,
+        doc='number of times to attempt the fit with different guesses',
+    )
+    maxfev = Field(
+        dtype=int,
+        doc='max allowed number of function evaluations in scipy.leastsq',
+    )
+    xtol = Field(
+        dtype=float,
+        doc='xtol paramter for scipy.leastsq',
+    )
+    ftol = Field(
+        dtype=float,
+        doc='ftol paramter for scipy.leastsq',
+    )
+
 class CenPriorConfig(Config):
     type = ChoiceField(
         dtype=str,
@@ -98,32 +116,92 @@ class BDFPriorsConfig(Config):
     flux = ConfigField(dtype=FluxPriorConfig, doc="prior on flux")
 
 
+class ObjectMaxConfigBase(Config):
+    """
+    base config for max likelihood fitting
+    """
+    max_pars = ConfigField(
+        dtype=MaxConfig,
+        doc="parameters for maximum likelihood fitting with scipy.leastsq",
+    )
 
-class ProcessCoaddsNGMixSimpleConfig(ProcessCoaddsTogetherConfig):
+class PSFMaxConfig(ObjectMaxConfigBase):
+    """
+    object fitting configuration
+    """
+    model = ChoiceField(
+        dtype=str,
+        allowed={
+            "gauss":"gaussian model",
+            "coellip2":"coelliptical 2 gauss model",
+            "coellip3":"coelliptical 3 gauss model",
+        },
+        doc="The model to fit with ngmix",
+    )
 
-    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
+    max_pars = ConfigField(
+        dtype=MaxConfig,
+        doc="parameters for maximum likelihood fitting with scipy.leastsq",
+    )
 
-    ntest = Field(dtype=int, default=None, doc="Do a test with only this many objects")
-    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
-    model = Field(dtype=str, doc="The model to fit with ngmix")
+
+class ObjectSimpleConfig(ObjectMaxConfigBase):
+    """
+    object fitting configuration
+    """
+    model = ChoiceField(
+        dtype=str,
+        allowed={
+            "gauss":"gaussian model",
+            "exp":"exponential model",
+            "dev":"dev model",
+        },
+        doc="The model to fit with ngmix",
+    )
 
     priors = ConfigField(dtype=SimplePriorsConfig, doc="priors for a simple model fitter")
+
+class ObjectBDFConfig(ObjectMaxConfigBase):
+    """
+    The BDF fitter fit the object using a 7 parameter bulge+disk with fixed
+    size fraction, as well as fitting the psf using max likelihood
+    """
+
+    model = ChoiceField(
+        dtype=str,
+        allowed={
+            "bdf":"Bulge+Disk with fixed size ratio",
+        },
+        doc="The model to fit with ngmix",
+    )
+
+    priors = ConfigField(dtype=BDFPriorsConfig, doc="priors for a BDF model fitter")
+
+class BasicProcessConfig(ProcessCoaddsTogetherConfig):
+    """
+    basic config loads filters and misc stuff
+    """
+    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
+    ntest = Field(dtype=int, default=None, doc="Do a test with only this many objects")
 
     def setDefaults(self):
         self.output.name = "deepCoadd_ngmix"
 
-class ProcessCoaddsNGMixBDFConfig(ProcessCoaddsTogetherConfig):
+class ProcessCoaddsNGMixSimpleConfig(BasicProcessConfig):
+    """
+    simple fitters fit the object using a 6 parameter model using maximum
+    likelihood, as well as fitting the psf using max likelihood
+    """
+    psf = ConfigField(dtype=PSFMaxConfig, doc='psf fitting config')
+    obj = ConfigField(dtype=ObjectSimpleConfig,doc="object fitting config")
 
-    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
-
-    ntest = Field(dtype=int, default=None, doc="Do a test with only this many objects")
-    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
-    model = Field(dtype=str, doc="The model to fit with ngmix")
-
-    priors = ConfigField(dtype=SimplePriorsConfig, doc="priors for a simple model fitter")
-
-    def setDefaults(self):
-        self.output.name = "deepCoadd_ngmix"
+class ProcessCoaddsNGMixBDFConfig(BasicProcessConfig):
+    """
+    simple fitters fit the object using a 6 parameter model using maximum
+    likelihood, as well as fitting the psf using max likelihood
+    """
+    psf = ConfigField(dtype=PSFMaxConfig, doc='psf fitting config')
+    obj = ConfigField(dtype=ObjectBDFConfig,doc="object fitting config")
 
 
 class ProcessCoaddsNGMixTaskBase(ProcessCoaddsTogetherTask):
