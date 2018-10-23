@@ -32,7 +32,7 @@ import ngmix
 
 from pprint import pprint
 
-#__all__ = ("ProcessCoaddsNgMixConfig", "ProcessCoaddsNgMixTask")
+#__all__ = ("ProcessCoaddsNGMixConfig", "ProcessCoaddsNGMixTask")
 
 class CenPriorConfig(Config):
     type = ChoiceField(
@@ -99,7 +99,7 @@ class BDFPriorsConfig(Config):
 
 
 
-class ProcessCoaddsNgMixSimpleConfig(ProcessCoaddsTogetherConfig):
+class ProcessCoaddsNGMixSimpleConfig(ProcessCoaddsTogetherConfig):
 
     filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
 
@@ -112,7 +112,7 @@ class ProcessCoaddsNgMixSimpleConfig(ProcessCoaddsTogetherConfig):
     def setDefaults(self):
         self.output.name = "deepCoadd_ngmix"
 
-class ProcessCoaddsNgMixBDFConfig(ProcessCoaddsTogetherConfig):
+class ProcessCoaddsNGMixBDFConfig(ProcessCoaddsTogetherConfig):
 
     filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
 
@@ -126,15 +126,15 @@ class ProcessCoaddsNgMixBDFConfig(ProcessCoaddsTogetherConfig):
         self.output.name = "deepCoadd_ngmix"
 
 
-class ProcessCoaddsNgMixTaskBase(ProcessCoaddsTogetherTask):
+class ProcessCoaddsNGMixTaskBase(ProcessCoaddsTogetherTask):
     """
     Base class for ngmix tasks
     """
-    _DefaultName = "processCoaddsNgMixSimple"
-    ConfigClass = ProcessCoaddsNgMixSimpleConfig
+    _DefaultName = "processCoaddsNGMixSimple"
+    ConfigClass = ProcessCoaddsNGMixSimpleConfig
 
     def __init__(self, *args, **kw):
-        super(ProcessCoaddsNgMixTaskBase,self).__init__(*args, **kw)
+        super(ProcessCoaddsNGMixTaskBase,self).__init__(*args, **kw)
 
         # we will find it convenient to have a dictionary version of the
         # configuration
@@ -261,12 +261,12 @@ class ProcessCoaddsNgMixTaskBase(ProcessCoaddsTogetherTask):
         return {}
 
 
-class ProcessCoaddsNgMixSimpleTask(ProcessCoaddsNgMixTaskBase):
+class ProcessCoaddsNGMixSimpleTask(ProcessCoaddsNGMixTaskBase):
     """
     Fit simple models using ngmix
     """
-    _DefaultName = "processCoaddsNgMixSimple"
-    ConfigClass = ProcessCoaddsNgMixSimpleConfig
+    _DefaultName = "processCoaddsNGMixSimple"
+    ConfigClass = ProcessCoaddsNGMixSimpleConfig
 
     def defineSchema(self, refSchema):
         """Return the Schema for the output catalog.
@@ -285,7 +285,7 @@ class ProcessCoaddsNgMixSimpleTask(ProcessCoaddsNgMixTaskBase):
             by calling code.
         """
 
-        schema = super(ProcessCoaddsNgMixSimpleTask,self).defineSchema(refSchema)
+        schema = super(ProcessCoaddsNGMixSimpleTask,self).defineSchema(refSchema)
         schema.addField("test_field",type=np.int32,doc="test field for schema")
         return schema
 
