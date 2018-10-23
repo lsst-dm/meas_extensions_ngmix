@@ -1,3 +1,5 @@
 #!/usr/bin/env python
-from lsst.meas.extensions.ngmix import ProcessCoaddsNgMixTask
-ProcessCoaddsNgMixTask.parseAndRun()
+
+# fit a simple model
+from lsst.meas.extensions.ngmix import ProcessCoaddsNgMixSimpleTask
+ProcessCoaddsNgMixSimpleTask.parseAndRun()

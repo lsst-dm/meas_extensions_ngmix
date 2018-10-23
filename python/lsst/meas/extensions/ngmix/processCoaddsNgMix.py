@@ -23,31 +23,123 @@ import numpy as np
 from lsst.geom import Extent2D
 from lsst.afw.table import SourceCatalog, SchemaMapper
 import lsst.afw.geom as afwGeom
-from lsst.pex.config import Field, ListField
+from lsst.pex.config import Field, ListField, ConfigField, Config, ChoiceField
 from lsst.pipe.base import Struct
 
 from .processCoaddsTogether import ProcessCoaddsTogetherConfig, ProcessCoaddsTogetherTask
 
 import ngmix
 
-__all__ = ("ProcessCoaddsNgMixConfig", "ProcessCoaddsNgMixTask")
+from pprint import pprint
+
+#__all__ = ("ProcessCoaddsNgMixConfig", "ProcessCoaddsNgMixTask")
+
+class CenPriorConfig(Config):
+    type = ChoiceField(
+        dtype=str,
+        allowed={
+            "gauss2d":"2d gaussian",
+        },
+        doc="type of prior for center",
+    )
+    pars = ListField(dtype=float, doc="parameters for the center prior")
+
+class GPriorConfig(Config):
+    type = ChoiceField(
+        dtype=str,
+        allowed={
+            "ba":"See Bernstein & Armstrong",
+        },
+        doc="type of prior for ellipticity g",
+    )
+    pars = ListField(dtype=float, doc="parameters for the ellipticity prior")
+
+class TPriorConfig(Config):
+    type = ChoiceField(
+        dtype=str,
+        allowed={
+            "two-sided-erf":"two-sided error function, smoother than a flat prior",
+        },
+        doc="type of prior for the square size T",
+    )
+    pars = ListField(dtype=float, doc="parameters for the T prior")
+
+class FluxPriorConfig(Config):
+    type = ChoiceField(
+        dtype=str,
+        allowed={
+            "two-sided-erf":"two-sided error function, smoother than a flat prior",
+        },
+        doc="type of prior for the flux; gets repeated for multiple bands",
+    )
+    pars = ListField(dtype=float, doc="parameters for the flux prior")
+
+class FracdevPriorConfig(Config):
+    type = ChoiceField(
+        dtype=str,
+        allowed={
+            "gauss":"gaussian prior on fracdev",
+        },
+        doc="type of prior for fracdev",
+    )
+    pars = ListField(dtype=float, doc="parameters for the fracdev prior")
+
+class SimplePriorsConfig(Config):
+    cen = ConfigField(dtype=CenPriorConfig, doc="prior on center")
+    g = ConfigField(dtype=GPriorConfig, doc="prior on g")
+    T = ConfigField(dtype=TPriorConfig, doc="prior on square size T")
+    flux = ConfigField(dtype=FluxPriorConfig, doc="prior on flux")
+
+class BDFPriorsConfig(Config):
+    cen = ConfigField(dtype=CenPriorConfig, doc="prior on center")
+    g = ConfigField(dtype=GPriorConfig, doc="prior on g")
+    T = ConfigField(dtype=TPriorConfig, doc="prior on square size T")
+    fracdev = ConfigField(dtype=FracdevPriorConfig, doc="prior on fracdev")
+    flux = ConfigField(dtype=FluxPriorConfig, doc="prior on flux")
 
 
-class ProcessCoaddsNgMixConfig(ProcessCoaddsTogetherConfig):
+
+class ProcessCoaddsNgMixSimpleConfig(ProcessCoaddsTogetherConfig):
 
     filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
-    ntest = Field(dtype=int, default=None, doc="Do a test with only this many objects")
 
-    # TODO: add config fields here, e.g.:
-    maxIter = Field(dtype=int, doc="Maximum number of iterations", default=100, optional=False)
+    ntest = Field(dtype=int, default=None, doc="Do a test with only this many objects")
+    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
+    model = Field(dtype=str, doc="The model to fit with ngmix")
+
+    priors = ConfigField(dtype=SimplePriorsConfig, doc="priors for a simple model fitter")
+
+    def setDefaults(self):
+        self.output.name = "deepCoadd_ngmix"
+
+class ProcessCoaddsNgMixBDFConfig(ProcessCoaddsTogetherConfig):
+
+    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
+
+    ntest = Field(dtype=int, default=None, doc="Do a test with only this many objects")
+    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
+    model = Field(dtype=str, doc="The model to fit with ngmix")
+
+    priors = ConfigField(dtype=SimplePriorsConfig, doc="priors for a simple model fitter")
 
     def setDefaults(self):
         self.output.name = "deepCoadd_ngmix"
 
 
-class ProcessCoaddsNgMixTask(ProcessCoaddsTogetherTask):
-    _DefaultName = "processCoaddsNgMix"
-    ConfigClass = ProcessCoaddsNgMixConfig
+class ProcessCoaddsNgMixTaskBase(ProcessCoaddsTogetherTask):
+    """
+    Base class for ngmix tasks
+    """
+    _DefaultName = "processCoaddsNgMixSimple"
+    ConfigClass = ProcessCoaddsNgMixSimpleConfig
+
+    def __init__(self, *args, **kw):
+        super(ProcessCoaddsNgMixTaskBase,self).__init__(*args, **kw)
+
+        # we will find it convenient to have a dictionary version of the
+        # configuration
+
+        self.cdict=self.config.toDict()
 
     def defineSchema(self, refSchema):
         """Return the Schema for the output catalog.
@@ -88,10 +180,15 @@ class ProcessCoaddsNgMixTask(ProcessCoaddsTogetherTask):
 
         return schema
 
+
     def run(self, images, ref):
         """Process coadds from all bands for a single patch.
 
         This method should not add or modify self.
+
+        So far all children are u sing this exact code so leaving
+        it here for now. If we specialize a lot, might make a 
+        processor its own object
 
         Parameters
         ----------
@@ -108,10 +205,10 @@ class ProcessCoaddsNgMixTask(ProcessCoaddsTogetherTask):
             to be written as ``self.config.output``.
         """
 
-        config=self.config
+        config=self.cdict
+        pprint(config)
 
-        if set(images.keys()) != set(config.filters):
-            raise RuntimeError("One or more filters missing.")
+        extractor = self._get_extractor(images)
 
         # Make an empty catalog
         output = SourceCatalog(self.schema)
@@ -127,50 +224,22 @@ class ProcessCoaddsNgMixTask(ProcessCoaddsTogetherTask):
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
 
-            mbobs = self._extract_mbobs(images, refRecord)
+            mbobs = extractor.get_mbobs(refRecord)
 
             fit = self._fit_object(mbobs)
             for k, v in fit.items():
                 outRecord[k] = v
 
-            if config.ntest is not None and n == config.ntest-1:
+            if config['ntest'] is not None and n == config['ntest']-1:
                 break
 
         return Struct(output=output)
 
-    def _extract_mbobs(self, images, rec):
+    def _get_extractor(self, images):
         """
-        make an ngmix.MultiBandObsList for input to the fitter
-
-        parameters
-        ----------
-        images: dict
-            A dictionary of image objects
-        rec: object record
-            TODO I don't actually know what class this is
-
-        returns
-        -------
-        mbobs: ngmix.MultiBandObsList
-            ngmix multi-band observation list
+        load the appropriate observation extractor
         """
-        self._check_images(images)
-
-        mbobs=ngmix.MultiBandObsList()
-
-        xy0=None
-        for filt in self.config.filters:
-            # TODO: run noise replacers here
-
-            imf = images[filt]
-
-            obs = extract_obs(imf, rec)
-
-            obslist=ngmix.ObsList()
-            obslist.append(obs)
-            mbobs.append(obslist)
-
-        return mbobs
+        return MBObsExtractor(self.cdict, images)
 
     def _fit_object(self, mbobs):
         """Fit a single object.
@@ -191,29 +260,126 @@ class ProcessCoaddsNgMixTask(ProcessCoaddsTogetherTask):
 
         return {}
 
-    def _check_images(self, images):
+
+class ProcessCoaddsNgMixSimpleTask(ProcessCoaddsNgMixTaskBase):
+    """
+    Fit simple models using ngmix
+    """
+    _DefaultName = "processCoaddsNgMixSimple"
+    ConfigClass = ProcessCoaddsNgMixSimpleConfig
+
+    def defineSchema(self, refSchema):
+        """Return the Schema for the output catalog.
+
+        This may add or modify self.
+
+        Parameters
+        ----------
+        refSchema : `lsst.afw.table.Schema`
+            Schema of the input reference catalogs.
+
+        Returns
+        -------
+        outputSchema : `lsst.afw.table.Schema`
+            Schema of the output catalog.  Will be added as ``self.schema``
+            by calling code.
+        """
+
+        schema = super(ProcessCoaddsNgMixSimpleTask,self).defineSchema(refSchema)
+        schema.addField("test_field",type=np.int32,doc="test field for schema")
+        return schema
+
+class MBObsExtractor(object):
+    """
+    class to extract observations from the images
+
+    parameters
+    ----------
+    images: dict
+        A dictionary of image objects
+
+    """
+    def __init__(self, config, images):
+        self.config=config
+        self.images=images
+
+        self._verify()
+
+    def get_mbobs(self, rec):
+        """
+        make an ngmix.MultiBandObsList for input to the fitter
+
+        parameters
+        ----------
+        images: dict
+            A dictionary of image objects
+        rec: object record
+            TODO I don't actually know what class this is
+
+        returns
+        -------
+        mbobs: ngmix.MultiBandObsList
+            ngmix multi-band observation list
+        """
+
+        mbobs=ngmix.MultiBandObsList()
+
+        xy0=None
+        for filt in self.config['filters']:
+            # TODO: run noise replacers here
+
+            imf = self.images[filt]
+
+            bbox = self._get_bbox(rec)
+
+            obs = extract_obs(imf, rec, bbox)
+
+            obslist=ngmix.ObsList()
+            obslist.append(obs)
+            mbobs.append(obslist)
+
+        return mbobs
+
+    def _get_bbox(self, rec):
+        """
+        get the bounding box for this object
+
+        TODO fine tune the bounding box algorithm
+
+        parameters
+        ----------
+        rec: object record
+            TODO I don't actually know what class this is
+
+        returns
+        -------
+        bbox:
+            TODO I don't actually know what class this is
+        """
+        return afwGeom.Box2I(rec.getFootprint().getBBox())
+
+    def _verify(self):
         """
         check for consistency between the images. 
         
         TODO An assertion is currently used, we may want to raise an appropriate
         exception
-
-        parameters
-        ----------
-        images: dict
-            A dict of image objects, keyed by filter name
-
         """
         xy0=None
-        for filt in self.config.filters:
-            imf = images[filt]
+        for filt in self.config['filters']:
+            imf = self.images[filt]
             if xy0 is None:
                 xy0 = imf.getXY0()
             else:
                 assert xy0 == imf.getXY0(),\
                         "all images must have same reference position"
 
-def extract_obs(imobj, rec):
+        if set(self.images.keys()) != set(self.config['filters']):
+            raise RuntimeError("One or more filters missing.")
+
+
+
+def extract_obs(imobj, rec, bbox):
     """
     convert an image object into an ngmix.Observation, including
     a psf observation
@@ -232,8 +398,10 @@ def extract_obs(imobj, rec):
     obs: ngmix.Observation
         The Observation, including 
     """
-    im = imobj.image.array
-    wt = extract_weight(imobj)
+    imobj_sub = imobj[bbox]
+
+    im = imobj_sub.image.array
+    wt = extract_weight(imobj_sub)
 
     cen = rec.getCentroid()
     psf_im = imobj.getPsf().computeKernelImage(cen).array
@@ -304,7 +472,7 @@ def extract_jacobian(imobj, rec):
     return jacob
 
 
-def extract_weight(stamp):
+def extract_weight(imobj):
     """
     TODO get the estimated sky variance rather than this hack
     TODO should we zero out other bits?
@@ -319,10 +487,14 @@ def extract_weight(stamp):
 
     parameters
     ----------
-    stamp: an image object
+    imobj: an image object
         TODO I don't actually know what class this is
     """
-    var_image  = stamp.variance.array
+    var_image  = imobj.variance.array
+    maskobj = imobj.mask
+    mask = maskobj.array
+
+
     weight = var_image.copy()
 
     weight[:,:]=0
@@ -330,7 +502,7 @@ def extract_weight(stamp):
     zlogic = var_image > 0
 
     no_data_logic = np.logical_not(
-        stamp.mask.array & stamp.mask.getPlaneBitMask("NO_DATA")
+        mask & maskobj.getPlaneBitMask("NO_DATA")
     )
     w=np.where(zlogic & no_data_logic)
 
