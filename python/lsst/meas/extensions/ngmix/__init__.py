@@ -24,4 +24,4 @@ from .EMPsfApprox import *
 from .converters import *
 
 from .processCoaddsTogether import *
-from .processCoaddsNgMix import *
+from .processCoaddsNGMix import *
