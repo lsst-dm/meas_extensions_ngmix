@@ -43,29 +43,6 @@ class MaxBootstrapper(BootstrapperBase):
         """
         return self._result
 
-    def _set_default_result(self):
-        self._result = {
-            # overall processing flags
-            'flags':procflags.NO_ATTEMPT,
-
-            # psf fitting related information
-            'psf':{
-                'flags':procflags.NO_ATTEMPT,
-                'byband':[],
-            },
-
-            # psf flux fitting related information
-            'psf_flux':{
-                'flags':procflags.NO_ATTEMPT,
-                'byband':[],
-            },
-
-            # object fitting related information
-            'obj': {
-                'flags':procflags.NO_ATTEMPT,
-            }
-        }
-
     def fit_psfs(self):
         """
         Fit the psfs and set the gmix attribute
@@ -123,6 +100,8 @@ class MaxBootstrapper(BootstrapperBase):
         """
         use psf as a template, measure flux (linear)
 
+        make normalize_psf a configurable
+
         side effects
         ------------
         The result dict is modified to set the fit data and set flags.
@@ -131,7 +110,10 @@ class MaxBootstrapper(BootstrapperBase):
         mbobs = self.mbobs
 
         res=self.result
-        res_byband=res['psf_flux']['byband']
+        pfres=res['psf_flux']
+        pfres['flags']=0
+
+        res_byband=pfres['byband']
 
         for band,obs_list in enumerate(mbobs):
 
@@ -151,10 +133,39 @@ class MaxBootstrapper(BootstrapperBase):
                 tres=fitter.get_result()
 
             if tres['flags'] != 0:
+                pfres['flags'] |= procflags.PSF_FLUX_FIT_FAILURE 
                 res['flags'] |= procflags.PSF_FLUX_FIT_FAILURE 
 
             res_byband.append(tres)
 
+    def fit_model(self):
+        """
+        fit the model to the object
+        """
+
+        res=self.result
+
+        # we need psfs to be fit and psf fluxes to be fit
+        pfres=res['psf_flux']
+        if pfres['flags'] != 0:
+            raise RuntimeError(
+                'psf flux flags non zero: %d.  '
+                'cannot fit object without psf fluxes' % pfres['flags']
+            )
+
+        self.result['obj']['flags']=0
+
+        runner=self._get_runner()
+        runner.go(ntry=self.objconf['max_pars']['ntry'])
+
+        tres=runner.fitter.get_result()
+
+        res['obj'].update(tres)
+
+    def _set_model_stats(self, tres):
+        """
+        set parameters from the modeling
+        """
     def _set_mean_psf_stats(self, pres):
 
         byband=pres['byband']
@@ -198,6 +209,80 @@ class MaxBootstrapper(BootstrapperBase):
         """
         get a runner to be used for fitting the object
         """
-        pass
+
+        max_pars={}
+        max_pars.update(self.objconf['max_pars'])
+        max_pars['method']='lm'
+
+        guesser=self._get_guesser()
+
+        if self.objconf['model'] in ['bd','bdf']:
+            runner=ngmix.bootstrap.BDFRunner(
+                self.mbobs,
+                max_pars,
+                guesser,
+                prior=self.prior,
+            )
+        else:
+            runner=ngmix.bootstrap.MaxRunner(
+                self.mbobs,
+                self.objconf['model'],
+                max_pars,
+                guesser,
+                prior=self.prior,
+            )
+
+        return runner
+
+    def _get_guesser(self):
+        """
+        get a guesser for the model parameters
+        """
+        pfres=self.result['psf_flux']
+        if pfres['flags'] != 0:
+            raise RuntimeError(
+                'psf flux flags non zero: %d.  '
+                'cannot fit object without psf fluxes' % pfres['flags']
+            )
+
+        Tguess=self.result['psf']['T_mean']
+        flux_guesses = [t['flux'] for t in pfres['byband']]
+        if self.objconf['model'] in ['bd','bdf']:
+            guesser=ngmix.guessers.BDFGuesser(
+                Tguess,
+                flux_guesses,
+                self.prior,
+            )
+        else:
+            guesser=ngmix.guessers.TFluxAndPriorGuesser(
+                Tguess,
+                flux_guesses,
+                self.prior,
+            )
+
+        return guesser
+
+    def _set_default_result(self):
+        self._result = {
+            # overall processing flags
+            'flags':procflags.NO_ATTEMPT,
+
+            # psf fitting related information
+            'psf':{
+                'flags':procflags.NO_ATTEMPT,
+                'byband':[],
+            },
+
+            # psf flux fitting related information
+            'psf_flux':{
+                'flags':procflags.NO_ATTEMPT,
+                'byband':[],
+            },
+
+            # object fitting related information
+            'obj': {
+                'flags':procflags.NO_ATTEMPT,
+            }
+        }
 
 
