@@ -294,7 +294,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             (pn('T_mean'),'mean over filters <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
         ]
 
-        # measurements by filter
+        # PSF measurements by filter
         for filt in config['filters']:
             pfn=self.get_psf_namer(filt=filt)
             mtypes += [
@@ -327,6 +327,15 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
                 ),
             ]
 
+        # PSF flux measurements, on the object, by filter
+        for filt in config['filters']:
+            pfn=self.get_psf_flux_namer(filt)
+            mtypes += [
+                (pfn('flux_flags'),'flags for PSF template flux fitting in the %s filter' % filt,np.float64,''),
+                (pfn('flux'),'PSF template flux in the %s filter' % filt,np.float64,''),
+                (pfn('flux_err'),'error on PSF template flux in the %s filter' % filt,np.float64,''),
+            ]
+
 
         # object fitting related fields
         mtypes += [
@@ -354,9 +363,10 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             ]
 
         for filt in config['filters']:
+            mfn=self.get_model_flux_namer(filt)
             mtypes += [
-                (mn('%s_flux' % filt),'flux in the %s filter' % filt,np.float64,''),
-                (mn('%s_flux_err' % filt),'error on flux in the %s filter' % filt,np.float64,''),
+                (mfn('flux'),'flux in the %s filter' % filt,np.float64,''),
+                (mfn('flux_err'),'error on flux in the %s filter' % filt,np.float64,''),
             ]
 
         for name,doc,dtype,units in mtypes:
@@ -538,6 +548,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         model=config['obj']['model']
         return Namer(front='ngmix_%s' % model)
 
+
     def get_psf_namer(self, filt=None):
         """
         get a namer for this output type
@@ -546,6 +557,23 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         if filt is not None:
             front='%s_%s' % (front,filt)
         return Namer(front=front)
+
+
+    def get_model_flux_namer(self, filt):
+        """
+        get a namer for this output type
+        """
+        config=self.cdict
+        model=config['obj']['model']
+        front='ngmix_%s' % model
+        return Namer(front=front, back=filt)
+
+    def get_psf_flux_namer(self, filt):
+        """
+        get a namer for this output type
+        """
+        front='ngmix_psf'
+        return Namer(front=front, back=filt)
 
 
     @property
