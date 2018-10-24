@@ -234,9 +234,9 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
 class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
     """
-    Base class for ngmix tasks
+    Class for maximum likelihood fitting with ngmix
     """
-    _DefaultName = "processCoaddsNGMixSimple"
+    _DefaultName = "processCoaddsNGMixMax"
     ConfigClass = ProcessCoaddsNGMixMaxConfig
 
     def defineSchema(self, refSchema):
@@ -260,23 +260,6 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         schema = self.mapper.getOutputSchema()
 
         config=self.get_config()
-
-        # TODO: add custom output fields here via calls like
-        #
-        #    schema.addField("ngmix_r_flux", type=float, doc="flux in the r band", units="Jy")
-        #
-        # You can iterate over self.config.filters to get the list of filters
-        # we expect to see.  If you want to report fluxes in pixel units
-        # instead, use an '_instFlux' suffix instead with 'count' as the units.
-        #
-        # Use type="Flag" to add a boolean flag (for errors and not-errors).
-        #
-        # For ellipses and positions, you may want to use
-        # lsst.afw.table.{QuadrupoleKey, Point2DKey}.addFields to add several
-        # related fields at once.
-        #
-        # Or just add them however you like and DM people can convert them to
-        # our conventions later; whatever is easier.
 
         model=config['obj']['model']
         n=Namer(front='ngmix_%s' % model)
