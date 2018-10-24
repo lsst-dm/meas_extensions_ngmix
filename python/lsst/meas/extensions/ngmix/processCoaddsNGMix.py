@@ -3,6 +3,11 @@ Some TODO items (there are many more below in the code)
 
     - deal properly with the mask plane
     - do proper bounding box calculation
+        - see medsdm/producer
+        computeBoxRadius
+        projectBox
+        etc.
+
     - different output file names for different tasks
     - normalize psf for flux fitting?
     - set up logging
