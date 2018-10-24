@@ -26,3 +26,6 @@ from .converters import *
 from .processCoaddsTogether import *
 from .processCoaddsNGMix import *
 from . import util
+from . import procflags
+from . import bootstrap
+from . import priors
