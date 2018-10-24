@@ -1,6 +1,8 @@
 """
-big TODO items (more are below in the code)
+TODO items (more are below in the code)
     - different output file names for different tasks
+    - normalize psf for flux fitting?
+    - set up logging
 """
 #
 # Developed for the LSST Data Management System.
@@ -377,20 +379,6 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
                 units=units,
             )
 
-        """
-        for tname,doc,dtype,units in mtypes:
-            if 'psf' in tname or tname in ['flags','stamp_size']:
-                name=pn(tname)
-            else:
-                name=n(tname)
-            schema.addField(
-                name,
-                type=dtype,
-                doc=doc,
-                units=units,
-            )
-        """
-
         return schema
 
     def run(self, images, ref, imageId):
@@ -474,6 +462,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         boot=self._get_bootstrapper(mbobs)
         boot.fit_psfs()
+        boot.fit_psf_fluxes()
         return boot.result
 
     def _get_bootstrapper(self, mbobs):
@@ -503,6 +492,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         self._copy_psf_fit_result(res['psf'], output)
         self._copy_psf_fit_results_byband(res['psf'], output)
+        self._copy_psf_flux_results_byband(res['psf_flux'], output)
 
     def _copy_psf_fit_result(self, pres, output):
         """
@@ -533,6 +523,24 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
                 if filt_res['flags']==0:
                     for name in ['g1','g2','T']:
                         output[n(name)] = filt_res[name]
+
+    def _copy_psf_flux_results_byband(self, pres, output):
+        """
+        copy the PSF flux fitting results from each band to the output record.
+        """
+
+        config=self.cdict
+        for ifilt,filt in enumerate(config['filters']):
+            filt_res = pres['byband'][ifilt]
+
+            if filt_res is not None:
+                n=self.get_psf_flux_namer(filt=filt)
+
+                output[n('flux_flags')] = filt_res['flags']
+                if filt_res['flags']==0:
+                    output[n('flux')] = filt_res['flux']
+                    output[n('flux_err')] = filt_res['flux_err']
+
 
     def get_namer(self):
         """
@@ -737,7 +745,7 @@ def extract_obs(imobj, rec, bbox):
     psf_err = psf_im.max()*0.0001
     psf_wt = psf_im*0 + 1.0/psf_err**2
     
-    jacob = extract_jacobian(imobj, rec)
+    jacob = extract_jacobian(imobj_sub, rec)
 
     # use canonical center for the psf
     psf_cen = (np.array(psf_im.shape)-1.0)/2.0
