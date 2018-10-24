@@ -1,10 +1,18 @@
 """
 Some TODO items (there are many more below in the code)
+
     - deal properly with the mask plane
     - do proper bounding box calculation
     - different output file names for different tasks
     - normalize psf for flux fitting?
     - set up logging
+    - save all parameters for the PSF.  Because the number of parameters can
+    vary a lot, this would require either very special code or saving an array
+    (preferred for ease of coding)
+
+    - get docs for the classes/structures that are input
+    - get proper exceptions to throw rather than asserts, if that
+    is preferred
 """
 #
 # Developed for the LSST Data Management System.
@@ -280,10 +288,6 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         pn=self.get_psf_namer()
         mn=self.get_model_namer()
 
-        # TODO save all parameters for the PSF.  Because the number of parameters
-        # can vary a lot, this would require either very special code or
-        # saving an array (preferred for ease of coding)
-
         # generic ngmix fields
         mtypes=[
             (n('flags'),'overall flags for the processing',np.int32,''),
@@ -406,7 +410,6 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         # TODO: set up noise replacers for using deblender outputs
 
         for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
-            # TODO set up logging
             print(n)
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
@@ -744,8 +747,6 @@ def extract_obs(imobj, rec, bbox):
     """
     convert an image object into an ngmix.Observation, including
     a psf observation
-
-    TODO cut out a postage stamp
 
     parameters
     ----------
