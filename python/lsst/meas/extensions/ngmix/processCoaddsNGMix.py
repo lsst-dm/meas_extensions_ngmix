@@ -32,6 +32,8 @@ from lsst.pipe.base import Struct
 
 from .processCoaddsTogether import ProcessCoaddsTogetherConfig, ProcessCoaddsTogetherTask
 from .util import Namer
+from . import bootstrap
+from . import priors
 
 import ngmix
 
@@ -168,6 +170,10 @@ class PSFMaxFitConfig(MaxFitConfigBase):
         },
         doc="The model to fit with ngmix",
     )
+    fwhm_guess = Field(
+        dtype=float,
+        doc='rough guess for PSF FWHM',
+    )
 
 
 class ObjectMaxFitConfig(MaxFitConfigBase):
@@ -264,12 +270,21 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         model=config['obj']['model']
         n=Namer(front='ngmix_%s' % model)
 
+        # TODO save all parameters for the PSF.  Because the number of parameters
+        # can vary a lot, this would require either very special code or
+        # saving an array (preferred for ease of coding)
+
         mtypes=[
             ('flags','overall flags for the processing',np.int32,''),
-            ('psf_flags','flags for the PSF processing',np.int32,''),
+            ('psf_flags','overall flags for the PSF processing',np.int32,''),
         ]
         for filt in config['filters']:
             mtypes += [
+                ('psf_%s_flags' % filt,
+                 'overall flags for PSF processing in %s filter' % filt,
+                 np.int32,
+                 ''),
+
                 ('psf_%s_g1' % filt,
                  'component 1 of the PSF ellipticity in %s filter' % filt,
                  np.float64,
@@ -377,7 +392,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
             mbobs = extractor.get_mbobs(refRecord)
 
-            fit = self._fit_object(mbobs)
+            fit = self._do_fits(mbobs)
             for k, v in fit.items():
                 outRecord[k] = v
 
@@ -392,7 +407,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         return MBObsExtractor(self.cdict, images)
 
-    def _fit_object(self, mbobs):
+    def _do_fits(self, mbobs):
         """Fit a single object.
 
         Parameters
@@ -407,9 +422,50 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             `defineSchema()`.
         """
 
-        # TODO: real work goes here
-
+        boot=self._get_bootstrapper(mbobs)
+        boot.fit_psfs()
         return {}
+
+    def _get_bootstrapper(self, mbobs):
+        """
+        get a bootstrapper to automate the processing
+        """
+        config=self.get_config()
+        return bootstrap.MaxBootstrapper(
+            mbobs,
+            config['psf'],
+            config['obj'],
+            self.get_prior(),
+            self.get_rng(),
+        )
+
+    def get_rng(self):
+        """
+        get a ref to the random number generator
+        """
+        if not hasattr(self,'_rng'):
+            self._rng = np.random.RandomState()
+
+        return self._rng
+
+    def get_prior(self):
+        """
+        set the joint prior used for object fitting
+        """
+        if not hasattr(self, '_prior'):
+            # this is temporary until I can figure out how to get
+            # an existing seeded rng
+
+            conf=self.get_config()
+            nband=len(conf['filters'])
+            model=conf['obj']['model']
+            self._prior = priors.get_joint_prior(
+                conf['obj'],
+                nband,
+                self.get_rng(),
+            )
+
+        return self._prior
 
 
 class MBObsExtractor(object):
