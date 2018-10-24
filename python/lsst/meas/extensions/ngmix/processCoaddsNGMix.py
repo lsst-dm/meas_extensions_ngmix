@@ -1,5 +1,5 @@
 """
-TODO items (more are below in the code)
+Some TODO items (there are many more below in the code)
     - deal properly with the mask plane
     - do proper bounding box calculation
     - different output file names for different tasks
@@ -304,33 +304,10 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         for filt in config['filters']:
             pfn=self.get_psf_namer(filt=filt)
             mtypes += [
-                (
-                    pfn('flags'),
-                    'overall flags for PSF processing in %s filter' % filt,
-                    np.int32,
-                    ''
-                ),
-
-                (
-                    pfn('g1'),
-                    'component 1 of the PSF ellipticity in %s filter' % filt,
-                    np.float64,
-                    ''
-                ),
-
-                (
-                    pfn('g2'),
-                    'component 2 of the PSF ellipticity in %s filter' % filt,
-                    np.float64,
-                    ''
-                ),
-
-                (
-                    pfn('T'),
-                    '<x^2> + <y^2> for the PSF in %s filter' % filt,
-                    np.float64,
-                    'arcsec^2'
-                ),
+                (pfn('flags'), 'overall flags for PSF processing in %s filter' % filt, np.int32, ''),
+                (pfn('g1'), 'component 1 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
+                (pfn('g2'), 'component 2 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
+                (pfn('T'), '<x^2> + <y^2> for the PSF in %s filter' % filt, np.float64, 'arcsec^2'),
             ]
 
         # PSF flux measurements, on the object, by filter
