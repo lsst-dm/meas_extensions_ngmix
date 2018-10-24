@@ -231,12 +231,14 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
     _DefaultName = "processCoaddsNGMixBase"
     ConfigClass = BasicProcessConfig
 
-    def get_config(self):
-        # we will find it convenient to have a dictionary version of the
-        # configuration
-        if not hasattr(self,'cdict'):
-            self.cdict=self.config.toDict()
-        return self.cdict
+    @property
+    def cdict(self):
+        """
+        get a dict version of the configuration
+        """
+        if not hasattr(self,'_cdict'):
+            self._cdict=self.config.toDict()
+        return self._cdict
 
 class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
     """
@@ -265,85 +267,119 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         self.mapper.addMinimalSchema(SourceCatalog.Table.makeMinimalSchema(), True)
         schema = self.mapper.getOutputSchema()
 
-        config=self.get_config()
+        config=self.cdict
 
         model=config['obj']['model']
-        n=Namer(front='ngmix_%s' % model)
+        n=self.get_namer()
+        pn=self.get_psf_namer()
+        mn=self.get_model_namer()
 
         # TODO save all parameters for the PSF.  Because the number of parameters
         # can vary a lot, this would require either very special code or
         # saving an array (preferred for ease of coding)
 
+        # generic ngmix fields
         mtypes=[
-            ('flags','overall flags for the processing',np.int32,''),
-            ('psf_flags','overall flags for the PSF processing',np.int32,''),
+            (n('flags'),'overall flags for the processing',np.int32,''),
+            (n('stamp_size'),'size of postage stamp',np.int32,''),
         ]
+
+        # psf fitting related fields
+        mtypes += [
+            (pn('flags'),'overall flags for the PSF processing',np.int32,''),
+
+            # mean over filters
+            (pn('g2_mean'),'mean over filters of component 2 of the PSF ellipticity',np.float64,''),
+            (pn('g1_mean'),'mean over filters of component 2 of the PSF ellipticity',np.float64,''),
+            (pn('T_mean'),'mean over filters <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+        ]
+
+        # measurements by filter
         for filt in config['filters']:
+            pfn=self.get_psf_namer(filt=filt)
             mtypes += [
-                ('psf_%s_flags' % filt,
-                 'overall flags for PSF processing in %s filter' % filt,
-                 np.int32,
-                 ''),
+                (
+                    pfn('flags'),
+                    'overall flags for PSF processing in %s filter' % filt,
+                    np.int32,
+                    ''
+                ),
 
-                ('psf_%s_g1' % filt,
-                 'component 1 of the PSF ellipticity in %s filter' % filt,
-                 np.float64,
-                 ''),
+                (
+                    pfn('g1'),
+                    'component 1 of the PSF ellipticity in %s filter' % filt,
+                    np.float64,
+                    ''
+                ),
 
-                ('psf_%s_g2' % filt,
-                 'component 2 of the PSF ellipticity in %s filter' % filt,
-                 np.float64,
-                 ''),
+                (
+                    pfn('g2'),
+                    'component 2 of the PSF ellipticity in %s filter' % filt,
+                    np.float64,
+                    ''
+                ),
 
-                ('psf_%s_T' % filt,
-                 '<x^2> + <y^2> for the PSF in %s filter' % filt,
-                 np.float64,
-                 'arcsec^2'),
+                (
+                    pfn('T'),
+                    '<x^2> + <y^2> for the PSF in %s filter' % filt,
+                    np.float64,
+                    'arcsec^2'
+                ),
             ]
 
+
+        # object fitting related fields
         mtypes += [
-            ('psf_g2','mean component 2 of the PSF ellipticity',np.float64,''),
-            ('psf_g1','mean component 2 of the PSF ellipticity',np.float64,''),
-            ('psf_T','mean <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+            (mn('nfev'),'number of function evaluations during fit',np.int32,''),
+            (mn('chi2per'),'chi^2 per degree of freedom',np.float64,''),
+            (mn('dof'),'number of degrees of freedom',np.int32,''),
 
-            ('stamp_size','size of postage stamp',np.int32,''),
-            ('nfev','number of function evaluations during fit',np.int32,''),
-            ('chi2per','chi^2 per degree of freedom',np.float64,''),
-            ('dof','number of degrees of freedom',np.int32,''),
+            (mn('s2n'),'S/N for the fit',np.float64,''),
 
-            ('s2n','S/N for the fit',np.float64,''),
-
-            ('row','offset from canonical row position',np.float64,'arcsec'),
-            ('row_err','error on offset from canonical row position',np.float64,'arcsec'),
-            ('col','offset from canonical col position',np.float64,'arcsec'),
-            ('col_err','error on offset from canonical col position',np.float64,'arcsec'),
-            ('g1','component 1 of the ellipticity',np.float64,''),
-            ('g1_err','error on component 1 of the ellipticity',np.float64,''),
-            ('g2','component 2 of the ellipticity',np.float64,''),
-            ('g2_err','error on component 2 of the ellipticity',np.float64,''),
-            ('T','<x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
-            ('T_err','error on <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+            (mn('row'),'offset from canonical row position',np.float64,'arcsec'),
+            (mn('row_err'),'error on offset from canonical row position',np.float64,'arcsec'),
+            (mn('col'),'offset from canonical col position',np.float64,'arcsec'),
+            (mn('col_err'),'error on offset from canonical col position',np.float64,'arcsec'),
+            (mn('g1'),'component 1 of the ellipticity',np.float64,''),
+            (mn('g1_err'),'error on component 1 of the ellipticity',np.float64,''),
+            (mn('g2'),'component 2 of the ellipticity',np.float64,''),
+            (mn('g2_err'),'error on component 2 of the ellipticity',np.float64,''),
+            (mn('T'),'<x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+            (mn('T_err'),'error on <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
         ]
         if model=='bd':
             mtypes += [
-                ('fracdev','fraction of light in the bulge',np.float64,''),
-                ('fracdev_err','error on fraction of light in the bulge',np.float64,''),
+                (mn('fracdev'),'fraction of light in the bulge',np.float64,''),
+                (mn('fracdev_err'),'error on fraction of light in the bulge',np.float64,''),
             ]
 
         for filt in config['filters']:
             mtypes += [
-                ('%s_flux' % filt,'flux in the %s filter' % filt,np.float64,''),
-                ('%s_flux_err' % filt,'error on flux in the %s filter' % filt,np.float64,''),
+                (mn('%s_flux' % filt),'flux in the %s filter' % filt,np.float64,''),
+                (mn('%s_flux_err' % filt),'error on flux in the %s filter' % filt,np.float64,''),
             ]
 
-        for tname,doc,dtype,units in mtypes:
-            name=n(tname)
+        for name,doc,dtype,units in mtypes:
             schema.addField(
                 name,
                 type=dtype,
                 doc=doc,
                 units=units,
             )
+
+        """
+        for tname,doc,dtype,units in mtypes:
+            if 'psf' in tname or tname in ['flags','stamp_size']:
+                name=pn(tname)
+            else:
+                name=n(tname)
+            schema.addField(
+                name,
+                type=dtype,
+                doc=doc,
+                units=units,
+            )
+        """
 
         return schema
 
@@ -374,6 +410,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             to be written as ``self.config.output``.
         """
 
+        self.set_rng(imageId)
+
         config=self.cdict
         pprint(config)
 
@@ -395,9 +433,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
             mbobs = extractor.get_mbobs(refRecord)
 
-            fit = self._do_fits(mbobs)
-            for k, v in fit.items():
-                outRecord[k] = v
+            res = self._do_fits(mbobs)
+            self._copy_result(mbobs, res, outRecord)
 
             if config['ntest'] is not None and n == config['ntest']-1:
                 break
@@ -411,7 +448,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         return MBObsExtractor(self.cdict, images)
 
     def _do_fits(self, mbobs):
-        """Fit a single object.
+        """Perform fits for a single object.
 
         Parameters
         ----------
@@ -427,31 +464,111 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         boot=self._get_bootstrapper(mbobs)
         boot.fit_psfs()
-        return {}
+        return boot.result
 
     def _get_bootstrapper(self, mbobs):
         """
         get a bootstrapper to automate the processing
         """
-        config=self.get_config()
+        config=self.cdict
         return bootstrap.MaxBootstrapper(
             mbobs,
             config['psf'],
             config['obj'],
-            self.get_prior(),
-            self.get_rng(),
+            self.prior,
+            self.rng,
         )
 
-    def get_rng(self):
+    def _copy_result(self, mbobs, res, output):
+        """
+        copy the result dict to the output record
+        """
+        n=self.get_namer()
+        stamp_shape = mbobs[0][0].image.shape
+        print('stamp shape:',stamp_shape)
+        stamp_size=stamp_shape[0]
+
+        output[n('flags')] = res['flags']
+        output[n('stamp_size')] = stamp_size
+
+        self._copy_psf_fit_result(res['psf'], output)
+        self._copy_psf_fit_results_byband(res['psf'], output)
+
+    def _copy_psf_fit_result(self, pres, output):
+        """
+        copy the PSF result dict to the output record.
+        The statistics here are averaged over all bands
+        """
+
+        n=self.get_psf_namer()
+        output[n('flags')] = pres['flags']
+        if pres['flags'] == 0:
+            output[n('g1_mean')] = pres['g1_mean']
+            output[n('g2_mean')] = pres['g2_mean']
+            output[n('T_mean')]  = pres['T_mean']
+
+    def _copy_psf_fit_results_byband(self, pres, output):
+        """
+        copy the PSF result from each band to the output record.
+        """
+
+        config=self.cdict
+        for ifilt,filt in enumerate(config['filters']):
+            filt_res = pres['byband'][ifilt]
+
+            if filt_res is not None:
+                n=self.get_psf_namer(filt=filt)
+
+                output[n('flags')] = filt_res['flags']
+                if filt_res['flags']==0:
+                    for name in ['g1','g2','T']:
+                        output[n(name)] = filt_res[name]
+
+    def get_namer(self):
+        """
+        get a namer for this output type
+        """
+        return Namer(front='ngmix')
+
+    def get_model_namer(self):
+        """
+        get a namer for this output type
+        """
+        config=self.cdict
+        model=config['obj']['model']
+        return Namer(front='ngmix_%s' % model)
+
+    def get_psf_namer(self, filt=None):
+        """
+        get a namer for this output type
+        """
+        front='ngmix_psf'
+        if filt is not None:
+            front='%s_%s' % (front,filt)
+        return Namer(front=front)
+
+
+    @property
+    def rng(self):
         """
         get a ref to the random number generator
         """
-        if not hasattr(self,'_rng'):
-            self._rng = np.random.RandomState()
-
         return self._rng
 
-    def get_prior(self):
+    def set_rng(self, seed):
+        """
+        set a random number generator based on the input seed
+
+        parameters
+        ----------
+        seed: int
+            The seed for the random number generator
+        """
+        self._rng = np.random.RandomState(seed)
+    
+
+    @property
+    def prior(self):
         """
         set the joint prior used for object fitting
         """
@@ -459,13 +576,13 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             # this is temporary until I can figure out how to get
             # an existing seeded rng
 
-            conf=self.get_config()
+            conf=self.cdict
             nband=len(conf['filters'])
             model=conf['obj']['model']
             self._prior = priors.get_joint_prior(
                 conf['obj'],
                 nband,
-                self.get_rng(),
+                self.rng,
             )
 
         return self._prior
