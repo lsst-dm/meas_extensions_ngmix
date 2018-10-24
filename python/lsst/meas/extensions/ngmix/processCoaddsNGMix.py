@@ -1,5 +1,7 @@
 """
 TODO items (more are below in the code)
+    - deal properly with the mask plane
+    - do proper bounding box calculation
     - different output file names for different tasks
     - normalize psf for flux fitting?
     - set up logging
@@ -190,7 +192,9 @@ class ObjectMaxFitConfig(MaxFitConfigBase):
             "gauss":"gaussian model",
             "exp":"exponential model",
             "dev":"dev model",
+            # bd and bdf are the same
             "bd":"bulge+disk model with fixed size ratio",
+            "bdf":"bulge+disk model with fixed size ratio",
         },
         doc="The model to fit with ngmix",
     )
@@ -341,6 +345,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         # object fitting related fields
         mtypes += [
+            (mn('flags'),'flags for model fit',np.int32,''),
             (mn('nfev'),'number of function evaluations during fit',np.int32,''),
             (mn('chi2per'),'chi^2 per degree of freedom',np.float64,''),
             (mn('dof'),'number of degrees of freedom',np.int32,''),
@@ -358,7 +363,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             (mn('T'),'<x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
             (mn('T_err'),'error on <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
         ]
-        if model=='bd':
+        if model in ['bd','bdf']:
             mtypes += [
                 (mn('fracdev'),'fraction of light in the bulge',np.float64,''),
                 (mn('fracdev_err'),'error on fraction of light in the bulge',np.float64,''),
@@ -463,6 +468,13 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         boot=self._get_bootstrapper(mbobs)
         boot.fit_psfs()
         boot.fit_psf_fluxes()
+        if boot.result['psf']['flags'] !=0:
+            print('skipping model fit due psf fit failure')
+        elif boot.result['psf_flux']['flags']!=0:
+            print('skipping model fit due psf flux fit failure')
+        else:
+            boot.fit_model()
+
         return boot.result
 
     def _get_bootstrapper(self, mbobs):
@@ -493,6 +505,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         self._copy_psf_fit_result(res['psf'], output)
         self._copy_psf_fit_results_byband(res['psf'], output)
         self._copy_psf_flux_results_byband(res['psf_flux'], output)
+
+        self._copy_model_result(res['obj'], output)
 
     def _copy_psf_fit_result(self, pres, output):
         """
@@ -541,6 +555,41 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
                     output[n('flux')] = filt_res['flux']
                     output[n('flux_err')] = filt_res['flux_err']
 
+
+    def _copy_model_result(self, ores, output):
+        """
+        copy the model fitting result dict to the output record.
+        """
+
+        config=self.cdict
+
+        mn=self.get_model_namer()
+        output[mn('flags')] = ores['flags']
+        output[mn('nfev')] = ores['nfev']
+
+        if ores['flags']==0:
+            for n in ['chi2per','dof','s2n']:
+                output[mn(n)] = ores[n]
+
+            ni=[('row',0),('col',1),('g1',2),('g2',3),('T',4)]
+            if self.cdict['obj']['model'] in ['bd','bdf']:
+                ni += [('fracdev',5)]
+                flux_start=6
+            else:
+                flux_start=5
+
+            pars=ores['pars']
+            perr=ores['pars_err']
+            for n,i in ni:
+                output[mn(n)] = pars[i]
+                output[mn(n+'_err')] = perr[i]
+
+            for ifilt, filt in enumerate(config['filters']):
+
+                ind=flux_start+ifilt
+                mfn=self.get_model_flux_namer(filt)
+                output[mfn('flux')] = pars[ind]
+                output[mfn('flux_err')] = perr[ind]
 
     def get_namer(self):
         """
