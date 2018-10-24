@@ -57,6 +57,7 @@ class MaxBootstrapper(BootstrapperBase):
             # psf flux fitting related information
             'psf_flux':{
                 'flags':procflags.NO_ATTEMPT,
+                'byband':[],
             },
 
             # object fitting related information
@@ -100,7 +101,6 @@ class MaxBootstrapper(BootstrapperBase):
 
             pres['flags'] |= tres['flags']
 
-
             if tres['flags'] == 0:
                 gmix = fitter.get_gmix()
                 psf_obs.gmix = gmix
@@ -108,6 +108,9 @@ class MaxBootstrapper(BootstrapperBase):
                 tres['g1'] = g1
                 tres['g2'] = g2
                 tres['T'] = T
+            else:
+                filt=self.cdict['filters'][band]
+                print('psf fit failed for filter %s' % filt)
 
             pres_byband.append(tres)
 
@@ -115,6 +118,42 @@ class MaxBootstrapper(BootstrapperBase):
             self._set_mean_psf_stats(pres)
         else:
             res['flags'] |= procflags.PSF_FIT_FAILURE
+
+    def fit_psf_fluxes(self, normalize_psf=True):
+        """
+        use psf as a template, measure flux (linear)
+
+        side effects
+        ------------
+        The result dict is modified to set the fit data and set flags.
+        """
+
+        mbobs = self.mbobs
+
+        res=self.result
+        res_byband=res['psf_flux']['byband']
+
+        for band,obs_list in enumerate(mbobs):
+
+            if not obs_list[0].has_psf_gmix():
+                filt=self.cdict['filters'][band]
+                tres={'flags':procflags.NO_ATTEMPT}
+                print('not fitting psf flux in '
+                      'filter %s due to missing PSF fit' % filt)
+            else: 
+                fitter=ngmix.fitting.TemplateFluxFitter(
+                    obs_list,
+                    do_psf=True,
+                    normalize_psf=normalize_psf,
+                )
+                fitter.go()
+
+                tres=fitter.get_result()
+
+            if tres['flags'] != 0:
+                res['flags'] |= procflags.PSF_FLUX_FIT_FAILURE 
+
+            res_byband.append(tres)
 
     def _set_mean_psf_stats(self, pres):
 
