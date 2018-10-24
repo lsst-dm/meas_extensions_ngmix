@@ -1,15 +1,9 @@
-The meas_extensions_ngmix package provides lsst.meas.base.SingleFramePlugin
-style wrappers for some of the fitting algorithms contained in Erin Sheldon's
-ngmix package.  Ngmix creates models of 2d images comprised of multiple 2d
-Gaussian profiles. This package allows those model fitting capabilities to be
-used to create parameterized models of objects within the lsst.meas.base
-measurement framework.
-
-For more information on this code, please see the ngmix site at:
+The meas_extensions_ngmix package provides wrappers for various algorithms
+in the ngmix package.
 
     https://github.com/esheldon/ngmix
 
-This package currently contains a plugin wrapper for doing PSF approximation
-using the Expectation-Maximization fitter, and for modelling galaxy profiles
-using the Simple Levenberg-Marquardt fitters. In the future, we intend to
-extend this package to provide wrappers for some of the other Ngmix fitters.
+These include maximum likelihood model fitting to PSFs and objects using
+profiles made from gaussian mixtures.  These can be completely free gaussian
+mixtures, constrained mixtures, or mixtures designed to mimic sersic profiles.
+It also includes the basic code need to run metacalibration shear measurement.
