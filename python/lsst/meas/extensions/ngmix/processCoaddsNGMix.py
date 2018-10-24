@@ -1,3 +1,7 @@
+"""
+big TODO items (more are below in the code)
+    - different output file names for different tasks
+"""
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
@@ -27,6 +31,7 @@ from lsst.pex.config import Field, ListField, ConfigField, Config, ChoiceField
 from lsst.pipe.base import Struct
 
 from .processCoaddsTogether import ProcessCoaddsTogetherConfig, ProcessCoaddsTogetherTask
+from .util import Namer
 
 import ngmix
 
@@ -34,11 +39,10 @@ from pprint import pprint
 
 #__all__ = ("ProcessCoaddsNGMixConfig", "ProcessCoaddsNGMixTask")
 
-class MaxConfig(Config):
-    ntry = Field(
-        dtype=int,
-        doc='number of times to attempt the fit with different guesses',
-    )
+class LeastsqConfig(Config):
+    """
+    configuration for the likelihood fitting using scipy.leastsq
+    """
     maxfev = Field(
         dtype=int,
         doc='max allowed number of function evaluations in scipy.leastsq',
@@ -52,7 +56,20 @@ class MaxConfig(Config):
         doc='ftol paramter for scipy.leastsq',
     )
 
+class MaxConfig(Config):
+    ntry = Field(
+        dtype=int,
+        doc='number of times to attempt the fit with different guesses',
+    )
+    lm_pars = ConfigField(
+        dtype=LeastsqConfig,
+        doc="parameters for scipy.leastsq",
+    )
+
 class CenPriorConfig(Config):
+    """
+    configuration of the prior for the center position
+    """
     type = ChoiceField(
         dtype=str,
         allowed={
@@ -63,6 +80,9 @@ class CenPriorConfig(Config):
     pars = ListField(dtype=float, doc="parameters for the center prior")
 
 class GPriorConfig(Config):
+    """
+    configuration of the prior for the ellipticity g
+    """
     type = ChoiceField(
         dtype=str,
         allowed={
@@ -73,6 +93,9 @@ class GPriorConfig(Config):
     pars = ListField(dtype=float, doc="parameters for the ellipticity prior")
 
 class TPriorConfig(Config):
+    """
+    configuration of the prior for the square size T
+    """
     type = ChoiceField(
         dtype=str,
         allowed={
@@ -83,6 +106,9 @@ class TPriorConfig(Config):
     pars = ListField(dtype=float, doc="parameters for the T prior")
 
 class FluxPriorConfig(Config):
+    """
+    configuration of the prior for the flux
+    """
     type = ChoiceField(
         dtype=str,
         allowed={
@@ -93,6 +119,10 @@ class FluxPriorConfig(Config):
     pars = ListField(dtype=float, doc="parameters for the flux prior")
 
 class FracdevPriorConfig(Config):
+    """
+    configuration of the prior for fracdev, the fraction of the
+    light in the bulge
+    """
     type = ChoiceField(
         dtype=str,
         allowed={
@@ -102,21 +132,19 @@ class FracdevPriorConfig(Config):
     )
     pars = ListField(dtype=float, doc="parameters for the fracdev prior")
 
-class SimplePriorsConfig(Config):
+class ObjectPriorsConfig(Config):
+    """
+    Configuration of priors for the bulge+disk model
+    """
     cen = ConfigField(dtype=CenPriorConfig, doc="prior on center")
     g = ConfigField(dtype=GPriorConfig, doc="prior on g")
     T = ConfigField(dtype=TPriorConfig, doc="prior on square size T")
     flux = ConfigField(dtype=FluxPriorConfig, doc="prior on flux")
 
-class BDFPriorsConfig(Config):
-    cen = ConfigField(dtype=CenPriorConfig, doc="prior on center")
-    g = ConfigField(dtype=GPriorConfig, doc="prior on g")
-    T = ConfigField(dtype=TPriorConfig, doc="prior on square size T")
+    # this is optional, only used by the bulge+disk fitter
     fracdev = ConfigField(dtype=FracdevPriorConfig, doc="prior on fracdev")
-    flux = ConfigField(dtype=FluxPriorConfig, doc="prior on flux")
 
-
-class ObjectMaxConfigBase(Config):
+class MaxFitConfigBase(Config):
     """
     base config for max likelihood fitting
     """
@@ -125,9 +153,11 @@ class ObjectMaxConfigBase(Config):
         doc="parameters for maximum likelihood fitting with scipy.leastsq",
     )
 
-class PSFMaxConfig(ObjectMaxConfigBase):
+class PSFMaxFitConfig(MaxFitConfigBase):
     """
-    object fitting configuration
+    PSF fitting configuration using maximum likelihood
+
+    inherits max_pars
     """
     model = ChoiceField(
         dtype=str,
@@ -139,15 +169,12 @@ class PSFMaxConfig(ObjectMaxConfigBase):
         doc="The model to fit with ngmix",
     )
 
-    max_pars = ConfigField(
-        dtype=MaxConfig,
-        doc="parameters for maximum likelihood fitting with scipy.leastsq",
-    )
 
-
-class ObjectSimpleConfig(ObjectMaxConfigBase):
+class ObjectMaxFitConfig(MaxFitConfigBase):
     """
     object fitting configuration
+
+   inherits max_pars
     """
     model = ChoiceField(
         dtype=str,
@@ -155,27 +182,15 @@ class ObjectSimpleConfig(ObjectMaxConfigBase):
             "gauss":"gaussian model",
             "exp":"exponential model",
             "dev":"dev model",
+            "bd":"bulge+disk model with fixed size ratio",
         },
         doc="The model to fit with ngmix",
     )
 
-    priors = ConfigField(dtype=SimplePriorsConfig, doc="priors for a simple model fitter")
-
-class ObjectBDFConfig(ObjectMaxConfigBase):
-    """
-    The BDF fitter fit the object using a 7 parameter bulge+disk with fixed
-    size fraction, as well as fitting the psf using max likelihood
-    """
-
-    model = ChoiceField(
-        dtype=str,
-        allowed={
-            "bdf":"Bulge+Disk with fixed size ratio",
-        },
-        doc="The model to fit with ngmix",
+    priors = ConfigField(
+        dtype=ObjectPriorsConfig,
+        doc="priors for a maximum likelihood model fit",
     )
-
-    priors = ConfigField(dtype=BDFPriorsConfig, doc="priors for a BDF model fitter")
 
 class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     """
@@ -185,39 +200,44 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     ntest = Field(dtype=int, default=None, doc="Do a test with only this many objects")
 
     def setDefaults(self):
+        """
+        prefix for the output file
+        """
         self.output.name = "deepCoadd_ngmix"
 
-class ProcessCoaddsNGMixSimpleConfig(BasicProcessConfig):
+class ProcessCoaddsNGMixMaxConfig(BasicProcessConfig):
     """
-    simple fitters fit the object using a 6 parameter model using maximum
-    likelihood, as well as fitting the psf using max likelihood
+    fit the object and PSF using maximum likelihood
     """
-    psf = ConfigField(dtype=PSFMaxConfig, doc='psf fitting config')
-    obj = ConfigField(dtype=ObjectSimpleConfig,doc="object fitting config")
+    psf = ConfigField(dtype=PSFMaxFitConfig, doc='psf fitting config')
+    obj = ConfigField(dtype=ObjectMaxFitConfig,doc="object fitting config")
 
-class ProcessCoaddsNGMixBDFConfig(BasicProcessConfig):
-    """
-    simple fitters fit the object using a 6 parameter model using maximum
-    likelihood, as well as fitting the psf using max likelihood
-    """
-    psf = ConfigField(dtype=PSFMaxConfig, doc='psf fitting config')
-    obj = ConfigField(dtype=ObjectBDFConfig,doc="object fitting config")
+    #def setDefaults(self):
+    #    """
+    #    TODO why is this specific to deepCoadd?
+    #    """
+    #    self.output.name = "deepCoadd_ngmix_max"
 
+class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
+    """
+    Base class for ngmix tasks
+    """
+    _DefaultName = "processCoaddsNGMixBase"
+    ConfigClass = BasicProcessConfig
 
-class ProcessCoaddsNGMixTaskBase(ProcessCoaddsTogetherTask):
+    def get_config(self):
+        # we will find it convenient to have a dictionary version of the
+        # configuration
+        if not hasattr(self,'cdict'):
+            self.cdict=self.config.toDict()
+        return self.cdict
+
+class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
     """
     Base class for ngmix tasks
     """
     _DefaultName = "processCoaddsNGMixSimple"
-    ConfigClass = ProcessCoaddsNGMixSimpleConfig
-
-    def __init__(self, *args, **kw):
-        super(ProcessCoaddsNGMixTaskBase,self).__init__(*args, **kw)
-
-        # we will find it convenient to have a dictionary version of the
-        # configuration
-
-        self.cdict=self.config.toDict()
+    ConfigClass = ProcessCoaddsNGMixMaxConfig
 
     def defineSchema(self, refSchema):
         """Return the Schema for the output catalog.
@@ -239,6 +259,8 @@ class ProcessCoaddsNGMixTaskBase(ProcessCoaddsTogetherTask):
         self.mapper.addMinimalSchema(SourceCatalog.Table.makeMinimalSchema(), True)
         schema = self.mapper.getOutputSchema()
 
+        config=self.get_config()
+
         # TODO: add custom output fields here via calls like
         #
         #    schema.addField("ngmix_r_flux", type=float, doc="flux in the r band", units="Jy")
@@ -256,8 +278,76 @@ class ProcessCoaddsNGMixTaskBase(ProcessCoaddsTogetherTask):
         # Or just add them however you like and DM people can convert them to
         # our conventions later; whatever is easier.
 
-        return schema
+        model=config['obj']['model']
+        n=Namer(front='ngmix_%s' % model)
 
+        mtypes=[
+            ('flags','overall flags for the processing',np.int32,''),
+            ('psf_flags','flags for the PSF processing',np.int32,''),
+        ]
+        for filt in config['filters']:
+            mtypes += [
+                ('psf_%s_g1' % filt,
+                 'component 1 of the PSF ellipticity in %s filter' % filt,
+                 np.float64,
+                 ''),
+
+                ('psf_%s_g2' % filt,
+                 'component 2 of the PSF ellipticity in %s filter' % filt,
+                 np.float64,
+                 ''),
+
+                ('psf_%s_T' % filt,
+                 '<x^2> + <y^2> for the PSF in %s filter' % filt,
+                 np.float64,
+                 'arcsec^2'),
+            ]
+
+        mtypes += [
+            ('psf_g2','mean component 2 of the PSF ellipticity',np.float64,''),
+            ('psf_g1','mean component 2 of the PSF ellipticity',np.float64,''),
+            ('psf_T','mean <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+
+            ('stamp_size','size of postage stamp',np.int32,''),
+            ('nfev','number of function evaluations during fit',np.int32,''),
+            ('chi2per','chi^2 per degree of freedom',np.float64,''),
+            ('dof','number of degrees of freedom',np.int32,''),
+
+            ('s2n','S/N for the fit',np.float64,''),
+
+            ('row','offset from canonical row position',np.float64,'arcsec'),
+            ('row_err','error on offset from canonical row position',np.float64,'arcsec'),
+            ('col','offset from canonical col position',np.float64,'arcsec'),
+            ('col_err','error on offset from canonical col position',np.float64,'arcsec'),
+            ('g1','component 1 of the ellipticity',np.float64,''),
+            ('g1_err','error on component 1 of the ellipticity',np.float64,''),
+            ('g2','component 2 of the ellipticity',np.float64,''),
+            ('g2_err','error on component 2 of the ellipticity',np.float64,''),
+            ('T','<x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+            ('T_err','error on <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+        ]
+        if model=='bd':
+            mtypes += [
+                ('fracdev','fraction of light in the bulge',np.float64,''),
+                ('fracdev_err','error on fraction of light in the bulge',np.float64,''),
+            ]
+
+        for filt in config['filters']:
+            mtypes += [
+                ('%s_flux' % filt,'flux in the %s filter' % filt,np.float64,''),
+                ('%s_flux_err' % filt,'error on flux in the %s filter' % filt,np.float64,''),
+            ]
+
+        for tname,doc,dtype,units in mtypes:
+            name=n(tname)
+            schema.addField(
+                name,
+                type=dtype,
+                doc=doc,
+                units=units,
+            )
+
+        return schema
 
     def run(self, images, ref):
         """Process coadds from all bands for a single patch.
@@ -338,34 +428,6 @@ class ProcessCoaddsNGMixTaskBase(ProcessCoaddsTogetherTask):
 
         return {}
 
-
-class ProcessCoaddsNGMixSimpleTask(ProcessCoaddsNGMixTaskBase):
-    """
-    Fit simple models using ngmix
-    """
-    _DefaultName = "processCoaddsNGMixSimple"
-    ConfigClass = ProcessCoaddsNGMixSimpleConfig
-
-    def defineSchema(self, refSchema):
-        """Return the Schema for the output catalog.
-
-        This may add or modify self.
-
-        Parameters
-        ----------
-        refSchema : `lsst.afw.table.Schema`
-            Schema of the input reference catalogs.
-
-        Returns
-        -------
-        outputSchema : `lsst.afw.table.Schema`
-            Schema of the output catalog.  Will be added as ``self.schema``
-            by calling code.
-        """
-
-        schema = super(ProcessCoaddsNGMixSimpleTask,self).defineSchema(refSchema)
-        schema.addField("test_field",type=np.int32,doc="test field for schema")
-        return schema
 
 class MBObsExtractor(object):
     """
