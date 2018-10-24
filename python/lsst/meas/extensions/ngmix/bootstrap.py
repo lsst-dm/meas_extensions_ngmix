@@ -36,15 +36,30 @@ class MaxBootstrapper(BootstrapperBase):
 
         self._set_default_result()
 
+    @property
+    def result(self):
+        """
+        get a reference to the result dictionary
+        """
+        return self._result
+
     def _set_default_result(self):
-        self.result = {
+        self._result = {
+            # overall processing flags
+            'flags':procflags.NO_ATTEMPT,
+
+            # psf fitting related information
             'psf':{
                 'flags':procflags.NO_ATTEMPT,
                 'byband':[],
             },
+
+            # psf flux fitting related information
             'psf_flux':{
                 'flags':procflags.NO_ATTEMPT,
             },
+
+            # object fitting related information
             'obj': {
                 'flags':procflags.NO_ATTEMPT,
             }
@@ -59,7 +74,12 @@ class MaxBootstrapper(BootstrapperBase):
         The result dict is modified to set the fit data and set flags.  A gmix
         object set for the psf observations if the fits succeed
         """
-        pres=self.result['psf']
+        res=self.result
+
+        # we have now begun processing, so set to zero
+        res['flags'] = 0
+
+        pres=res['psf']
         pres_byband=pres['byband']
 
         pres['flags'] = 0
@@ -90,6 +110,23 @@ class MaxBootstrapper(BootstrapperBase):
                 tres['T'] = T
 
             pres_byband.append(tres)
+
+        if pres['flags']==0:
+            self._set_mean_psf_stats(pres)
+        else:
+            res['flags'] |= procflags.PSF_FIT_FAILURE
+
+    def _set_mean_psf_stats(self, pres):
+
+        byband=pres['byband']
+
+        g1 = np.array([t['g1'] for t in byband])
+        g2 = np.array([t['g2'] for t in byband])
+        T = np.array([t['T'] for t in byband])
+
+        pres['g1_mean'] = g1.mean()
+        pres['g2_mean'] = g2.mean()
+        pres['T_mean'] = T.mean()
 
     def _get_psf_runner(self, obs, Tguess):
         """
