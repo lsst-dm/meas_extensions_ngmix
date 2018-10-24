@@ -13,6 +13,17 @@ Some TODO items (there are many more below in the code)
     - get docs for the classes/structures that are input
     - get proper exceptions to throw rather than asserts, if that
     is preferred
+
+    - move configuration stuff to a separate module
+    - move ngmix Observation extractor stuff to a separate module
+
+    - add configuration for metacalibration
+    - add Tasks for basic metacal
+    - add Tasks that work on deblended coadds, including for metacal
+
+    - add Tasks for multi-object fitting (MOF), which will require
+      making stamps for multiple objects and fitting simultaneously
+
 """
 #
 # Developed for the LSST Data Management System.
