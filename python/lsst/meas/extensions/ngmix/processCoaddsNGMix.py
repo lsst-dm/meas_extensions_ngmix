@@ -347,7 +347,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         return schema
 
-    def run(self, images, ref):
+    def run(self, images, ref, imageId):
         """Process coadds from all bands for a single patch.
 
         This method should not add or modify self.
@@ -363,6 +363,9 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         ref : `lsst.afw.table.SourceCatalog`
             A catalog with one record for each object, containing "best"
             measurements across all bands.
+        imageId : `int`
+            Unique ID for this unit of data.  Should be used (possibly
+            indirectly) to seed random numbers.
 
         Returns
         -------

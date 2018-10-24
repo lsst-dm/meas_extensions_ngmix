@@ -133,7 +133,8 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
                 mergedDataId = {"tract": patchRef.dataId["tract"], "patch": patchRef.dataId["patch"]}
         assert butler is not None
         ref = butler.get("deepCoadd_ref", dataId=mergedDataId)
-        results = self.run(images, ref)
+        imageId = butler.get("deepMergedCoaddId", dataId=mergedDataId)
+        results = self.run(images, ref, imageId=imageId)
         butler.put(results.output, self.config.output.name, dataId=mergedDataId)
 
     def defineSchema(self, refSchema):
