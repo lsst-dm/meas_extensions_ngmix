@@ -971,20 +971,20 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         copy the result dict to the output record
         """
-        return
 
         n=self.get_namer()
         stamp_shape = mbobs[0][0].image.shape
         stamp_size=stamp_shape[0]
 
-        output[n('flags')] = res['flags']
+        output[n('flags')] = res['mcal_flags']
         output[n('stamp_size')] = stamp_size
 
-        self._copy_psf_fit_result(res['psf'], output)
-        self._copy_psf_fit_results_byband(res['psf'], output)
-        self._copy_psf_flux_results_byband(res['psf_flux'], output)
+        self._copy_psf_fit_result(res['noshear']['psf'], output)
+        self._copy_psf_fit_results_byband(res['noshear']['psf'], output)
 
-        self._copy_model_result(res['obj'], output)
+        #self._copy_psf_flux_results_byband(res['psf_flux'], output)
+
+        self._copy_model_result(res, output)
 
     def _copy_psf_fit_result(self, pres, output):
         """
@@ -1034,44 +1034,49 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
                     output[n('flux_err')] = filt_res['flux_err']
 
 
-    def _copy_model_result(self, ores, output):
+    def _copy_model_result(self, res, output):
         """
         copy the model fitting result dict to the output record.
         """
 
         config=self.cdict
 
-        mn=self.get_model_namer()
-        output[mn('flags')] = ores['flags']
+        types=config['metacal']['types']
 
-        if 'nfev' in ores:
-            # can be there even if the fit failed, but won't be there
-            # if it wasn't attempted
-            output[mn('nfev')] = ores['nfev']
+        for type in types:
+            ores=res[type]['obj']
 
-        if ores['flags']==0:
-            for n in ['chi2per','dof','s2n']:
-                output[mn(n)] = ores[n]
+            mn=self.get_model_namer(type=type)
+            output[mn('flags')] = ores['flags']
 
-            ni=[('row',0),('col',1),('g1',2),('g2',3),('T',4)]
-            if self.cdict['obj']['model'] in ['bd','bdf']:
-                ni += [('fracdev',5)]
-                flux_start=6
-            else:
-                flux_start=5
+            if 'nfev' in ores:
+                # can be there even if the fit failed, but won't be there
+                # if it wasn't attempted
+                output[mn('nfev')] = ores['nfev']
 
-            pars=ores['pars']
-            perr=ores['pars_err']
-            for n,i in ni:
-                output[mn(n)] = pars[i]
-                output[mn(n+'_err')] = perr[i]
+            if ores['flags']==0:
+                for n in ['chi2per','dof','s2n']:
+                    output[mn(n)] = ores[n]
 
-            for ifilt, filt in enumerate(config['filters']):
+                ni=[('row',0),('col',1),('g1',2),('g2',3),('T',4)]
+                if self.cdict['obj']['model'] in ['bd','bdf']:
+                    ni += [('fracdev',5)]
+                    flux_start=6
+                else:
+                    flux_start=5
 
-                ind=flux_start+ifilt
-                mfn=self.get_model_flux_namer(filt)
-                output[mfn('flux')] = pars[ind]
-                output[mfn('flux_err')] = perr[ind]
+                pars=ores['pars']
+                perr=ores['pars_err']
+                for n,i in ni:
+                    output[mn(n)] = pars[i]
+                    output[mn(n+'_err')] = perr[i]
+
+                for ifilt, filt in enumerate(config['filters']):
+
+                    ind=flux_start+ifilt
+                    mfn=self.get_model_flux_namer(filt, type=type)
+                    output[mfn('flux')] = pars[ind]
+                    output[mfn('flux_err')] = perr[ind]
 
     def get_namer(self, type=None):
         """
