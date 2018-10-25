@@ -2,12 +2,7 @@
 Some TODO items (there are many more below in the code)
 
     - deal properly with the mask plane
-    - do proper bounding box calculation
-        - see medsdm/producer
-        computeBoxRadius
-        projectBox
-        etc.
-
+    - padding image with zeros because ngmix doesn't know about nan. OK?
     - different output file names for different tasks
     - normalize psf for flux fitting?
     - set up logging
@@ -55,6 +50,7 @@ import numpy as np
 from lsst.geom import Extent2D
 from lsst.afw.table import SourceCatalog, SchemaMapper
 import lsst.afw.geom as afwGeom
+import lsst.afw.image as afwImage
 from lsst.pex.config import Field, ListField, ConfigField, Config, ChoiceField
 from lsst.pipe.base import Struct
 
@@ -68,6 +64,29 @@ import ngmix
 from pprint import pprint
 
 #__all__ = ("ProcessCoaddsNGMixConfig", "ProcessCoaddsNGMixTask")
+
+class StampsConfig(Config):
+    """
+    configuration for the postage stamps
+    """
+    min_stamp_size = Field(
+        dtype=int,
+        default=32,
+        doc='min allowed stamp size',
+    )
+    max_stamp_size = Field(
+        dtype=int,
+        default=256,
+        doc='min allowed stamp size',
+    )
+    sigma_factor = Field(
+        dtype=float,
+        default=5.0,
+        doc='make stamp radius this many sigma',
+    )
+
+
+
 
 class LeastsqConfig(Config):
     """
@@ -233,7 +252,9 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     basic config loads filters and misc stuff
     """
     filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
-    ntest = Field(dtype=int, default=None, doc="Do a test with only this many objects")
+    obj_range = ListField(dtype=int, default=None,
+                          doc="Do a test using the specified range of objects")
+    stamps = ConfigField(dtype=StampsConfig, doc="configuration for postage stamps")
 
     def setDefaults(self):
         """
@@ -426,6 +447,9 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         # TODO: set up noise replacers for using deblender outputs
 
         for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
+            if config['obj_range'] is not None:
+                if n < config['obj_range'][0] or n > config['obj_range'][1]:
+                    continue
             print(n)
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
@@ -434,9 +458,6 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
             res = self._do_fits(mbobs)
             self._copy_result(mbobs, res, outRecord)
-
-            if config['ntest'] is not None and n == config['ntest']-1:
-                break
 
         return Struct(output=output)
 
@@ -460,6 +481,16 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             Dictionary of outputs, with keys matching the fields added in
             `defineSchema()`.
         """
+
+        if False:
+            imlist=[o[0].image for o in mbobs]
+            imlist += [o[0].weight for o in mbobs]
+            filters=self.cdict['filters']
+            show_images(
+                imlist,
+                ncols=len(filters),
+                titles=filters + [f+' wt' for f in filters]
+            )
 
         boot=self._get_bootstrapper(mbobs)
         boot.fit_psfs()
@@ -561,7 +592,11 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         mn=self.get_model_namer()
         output[mn('flags')] = ores['flags']
-        output[mn('nfev')] = ores['nfev']
+
+        if 'nfev' in ores:
+            # can be there even if the fit failed, but won't be there
+            # if it wasn't attempted
+            output[mn('nfev')] = ores['nfev']
 
         if ores['flags']==0:
             for n in ['chi2per','dof','s2n']:
@@ -704,15 +739,19 @@ class MBObsExtractor(object):
 
         mbobs=ngmix.MultiBandObsList()
 
-        xy0=None
         for filt in self.config['filters']:
             # TODO: run noise replacers here
 
             imf = self.images[filt]
 
-            bbox = self._get_bbox(rec)
+            bbox = self._get_bbox(rec, imf)
+            subim = _get_padded_sub_image(imf, bbox)
 
-            obs = extract_obs(imf, rec, bbox)
+            #obs = extract_obs(imf, rec, bbox)
+            #print("orig xy0:",imf.getXY0())
+            #print("centroid:",rec.getCentroid())
+            #print("coord:",rec.getCoord())
+            obs = extract_obs(subim, rec)
 
             obslist=ngmix.ObsList()
             obslist.append(obs)
@@ -720,7 +759,7 @@ class MBObsExtractor(object):
 
         return mbobs
 
-    def _get_bbox(self, rec):
+    def _get_bbox(self, rec, imobj):
         """
         get the bounding box for this object
 
@@ -736,7 +775,42 @@ class MBObsExtractor(object):
         bbox:
             TODO I don't actually know what class this is
         """
-        return afwGeom.Box2I(rec.getFootprint().getBBox())
+
+        stamp_radius, stamp_size = self._compute_stamp_size(rec)
+        #print('stamp radius:',stamp_radius,'size:',stamp_size)
+        bbox = _project_box(rec, imobj.getWcs(), stamp_radius)
+        return bbox
+
+        #return afwGeom.Box2I(rec.getFootprint().getBBox())
+
+    def _compute_stamp_size(self, rec):
+        """
+        calculate a stamp radius for the input object, to
+        be used for constructing postage stamp sizes
+        """
+        sconf = self.config['stamps']
+
+        min_radius = sconf['min_stamp_size']/2
+        max_radius = sconf['max_stamp_size']/2
+
+        quad = rec.getShape()
+        T = quad.getIxx() + quad.getIyy()
+        if np.isnan(T):
+            T=4.0
+
+        sigma = np.sqrt(T/2.0)
+        #print('object fwhm:',sigma*2.35,'sigma:',sigma)
+        radius = sconf['sigma_factor']*sigma
+
+        if radius < min_radius:
+            radius = min_radius
+        elif radius > max_radius:
+            radius = max_radius
+
+        radius = int(np.ceil(radius))
+        stamp_size = 2*radius+1
+
+        return radius, stamp_size
 
     def _verify(self):
         """
@@ -758,8 +832,58 @@ class MBObsExtractor(object):
             raise RuntimeError("One or more filters missing.")
 
 
+def extract_obs(imobj_sub, rec):
+    """
+    convert an image object into an ngmix.Observation, including
+    a psf observation
 
-def extract_obs(imobj, rec, bbox):
+    parameters
+    ----------
+    imobj: an image object
+        TODO I don't actually know what class this is
+    rec: an object record
+        TODO I don't actually know what class this is
+        
+    returns
+    --------
+    obs: ngmix.Observation
+        The Observation, including 
+    """
+
+    im = imobj_sub.image.array
+    wt = extract_weight(imobj_sub)
+
+    #cen = rec.getCentroid()
+    orig_cen = imobj_sub.getWcs().skyToPixel(rec.getCoord())
+    psf_im = imobj_sub.getPsf().computeKernelImage(orig_cen).array
+
+    # fake the psf pixel noise
+    psf_err = psf_im.max()*0.0001
+    psf_wt = psf_im*0 + 1.0/psf_err**2
+    
+    jacob = extract_jacobian(imobj_sub, rec)
+
+    # use canonical center for the psf
+    psf_cen = (np.array(psf_im.shape)-1.0)/2.0
+    psf_jacob = jacob.copy()
+    psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
+
+    psf_obs = ngmix.Observation(
+        psf_im,
+        weight=psf_wt,
+        jacobian=psf_jacob,
+    )
+    obs = ngmix.Observation(
+        im,
+        weight=wt,
+        jacobian=jacob,
+        psf=psf_obs,
+    )
+
+    return obs
+
+
+def extract_obs_old(imobj, rec, bbox):
     """
     convert an image object into an ngmix.Observation, including
     a psf observation
@@ -826,11 +950,15 @@ def extract_jacobian(imobj, rec):
     """
 
     xy0 = imobj.getXY0()
+    #print("xy0:",xy0)
 
-    orig_cen = rec.getCentroid()
+    orig_cen = imobj.getWcs().skyToPixel(rec.getCoord())
+    #orig_cen = rec.getCentroid()
     cen = orig_cen - Extent2D(xy0)
     row=cen.getY()
     col=cen.getX()
+    #print("orig_cen:",orig_cen)
+    #print("row col:",row,col)
 
     wcs = imobj.getWcs().linearizePixelToSky(
         orig_cen,
@@ -847,6 +975,7 @@ def extract_jacobian(imobj, rec):
         dvdcol = jmatrix[1,1],
     )
 
+    #print("jacob:",jacob)
     return jacob
 
 
@@ -884,11 +1013,95 @@ def extract_weight(imobj):
     )
     w=np.where(zlogic & no_data_logic)
 
+    #print("ngood:",w[0].size)
     if w[0].size > 0:
         medvar = np.median(var_image[w])
         weight[w] = 1.0/medvar
 
+    #print(weight)
     return weight
 
 
+def _project_box(source, wcs, radius):
+    """
+    create a box for the input source
+    """
+    pixel = afwGeom.Point2I(wcs.skyToPixel(source.getCoord()))
+    box = afwGeom.Box2I()
+    box.include(pixel)
+    box.grow(radius)
+    return box
 
+def _get_padded_sub_image(original, bbox):
+    """
+    extract a sub-image, padded out when it is not contained
+    """
+    region = original.getBBox()
+
+    if region.contains(bbox):
+        return original.Factory(original, bbox, afwImage.PARENT, True)
+
+    result = original.Factory(bbox)
+    bbox2 = afwGeom.Box2I(bbox)
+    bbox2.clip(region)
+    if isinstance(original, afwImage.Exposure):
+        result.setPsf(original.getPsf())
+        result.setWcs(original.getWcs())
+        result.setCalib(original.getCalib())
+        #result.image.array[:, :] = float("nan")
+        result.image.array[:, :] = 0.0
+        result.variance.array[:, :] = float("inf")
+        result.mask.array[:, :] = np.uint16(result.mask.getPlaneBitMask("NO_DATA"))
+        subIn = afwImage.MaskedImageF(original.maskedImage, bbox=bbox2,
+                                      origin=afwImage.PARENT, deep=False)
+        result.maskedImage.assign(subIn, bbox=bbox2, origin=afwImage.PARENT)
+    elif isinstance(original, afwImage.ImageI):
+        result.array[:, :] = 0
+        subIn = afwImage.ImageI(original, bbox=bbox2,
+                               origin=afwImage.PARENT, deep=False)
+        result.assign(subIn, bbox=bbox2, origin=afwImage.PARENT)
+    else:
+        raise ValueError("Image type not supported")
+    return result
+
+def show_images(images, ncols = 1, titles = None):
+    """Display a list of images in a single figure with matplotlib.
+    
+    Parameters
+    ---------
+    images: List of np.arrays compatible with plt.imshow.
+    
+    ncols (Default = 1): Number of columns in figure (number of rows is 
+                        set to np.ceil(n_images/float(ncols))).
+    
+    titles: List of titles corresponding to each image. Must have
+            the same length as titles.
+    """
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    assert((titles is None)or (len(images) == len(titles)))
+
+    n_images = len(images)
+    nrows = np.ceil(n_images/float(ncols))
+
+    if titles is None:
+        titles = ['Image (%d)' % i for i in range(1,n_images + 1)]
+
+    dpi=96
+    fig = plt.figure(figsize=(10,10), dpi=dpi)
+
+
+    for n, (image, title) in enumerate(zip(images, titles)):
+        a = fig.add_subplot(nrows, ncols, n + 1)
+        if image.ndim == 2:
+            plt.gray()
+        implt=plt.imshow(image, interpolation='nearest')
+        divider = make_axes_locatable(a)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(implt, cax=cax)
+        a.set_title(title)
+
+    #fig.set_size_inches(np.array(fig.get_size_inches()) * n_images)
+    plt.tight_layout()
+    plt.show()
