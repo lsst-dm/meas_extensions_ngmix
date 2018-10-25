@@ -3,11 +3,6 @@ PSF_FIT_FAILURE      = 2**0
 PSF_FLUX_FIT_FAILURE = 2**1
 GAL_FIT_FAILURE      = 2**2
 
-# an overall flag for metacal fitting
-# this will be set if any flags in
-# the mcal_flags field are set
-METACAL_FAILURE = 2**4
-
 # flags used by NGMixer
 #BAD_OBJ              = 2**25
 #IMAGE_FLAGS          = 2**26
@@ -16,5 +11,11 @@ METACAL_FAILURE = 2**4
 #UTTER_FAILURE        = 2**29
 NO_ATTEMPT           = 2**30
 
+# failure of PSF fitting at some point in metacal
+METACAL_PSF_FAILURE = 2**0
 
+# failure of PSF flux fitting at some point in metacal
+METACAL_PSF_FLUX_FAILURE = 2**1
 
+# failure of object fitting at some point in metacal
+METACAL_OBJ_FAILURE = 2**2
