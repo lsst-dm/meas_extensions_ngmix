@@ -1,5 +1,15 @@
 # optionally limit the number of objects we process
-config.ntest = 1000
+# the range is inclusive, not like a slice
+config.obj_range = [1000, 1009]
+
+#
+# postage stamp config
+#
+
+config.stamps.min_stamp_size = 32
+config.stamps.max_stamp_size = 256
+# how many "sigma" to make the radius of the box
+config.stamps.sigma_factor = 5.0
 
 ###############
 # object config
