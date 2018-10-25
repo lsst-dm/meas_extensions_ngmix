@@ -23,7 +23,12 @@ Some TODO items (there are many more below in the code)
     - move ngmix Observation extractor stuff to a separate module
 
     - add Tasks for basic metacal
-        - need to make sure we have all the stats we want
+        - make sure we are doing the right thing with the weight map.
+        - This means checking to see that the underlying metacal
+        code is working appropriately.
+        - also need to record somewhere an amount of masking that
+        is in place so we can cut on that.
+
     - add Tasks that work on deblended coadds, including for metacal
 
     - add Tasks for multi-object fitting (MOF), which will require
