@@ -126,8 +126,8 @@ config.obj.max_pars.lm_pars.ftol=5.0e-5
 #############
 # psf config
 
-# 3 cocentric, coelliptical gaussians
-config.psf.model="coellip3"
+# a single gaussian
+config.psf.model="gauss"
 config.psf.fwhm_guess=0.8
 
 # fitting parameters
