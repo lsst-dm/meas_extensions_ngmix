@@ -1,6 +1,9 @@
 """
 Some TODO items (there are many more below in the code)
 
+    - see if this trimmed PSF is off-center now.  This can cause problems for
+    metacal PSF treatment
+
     - get a real estimate of the background noise. I am faking this
       by taking the median of the weight map, which includes the
       object poisson noise.  metacal is not tested with object poisson
