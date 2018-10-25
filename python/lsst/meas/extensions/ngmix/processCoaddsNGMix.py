@@ -1,7 +1,12 @@
 """
 Some TODO items (there are many more below in the code)
 
-    - deal properly with the mask plane
+    - get a real estimate of the background noise. I am faking this
+      by taking the median of the weight map, which includes the
+      object poisson noise.  metacal is not tested with object poisson
+      noise included
+    - deal properly with the mask plane.  I've got something working
+      but need someone to look it over.
     - padding image with zeros because ngmix doesn't know about nan. OK?
     - different output file names for different tasks
     - normalize psf for flux fitting?
@@ -17,13 +22,15 @@ Some TODO items (there are many more below in the code)
     - move configuration stuff to a separate module
     - move ngmix Observation extractor stuff to a separate module
 
-    - add configuration for metacalibration
     - add Tasks for basic metacal
+        - need to make sure we have all the stats we want
     - add Tasks that work on deblended coadds, including for metacal
 
     - add Tasks for multi-object fitting (MOF), which will require
       making stamps for multiple objects and fitting simultaneously
 
+    - find out how to send command line arguments, e.g. to show
+      images during testing
 """
 #
 # Developed for the LSST Data Management System.
@@ -46,6 +53,7 @@ Some TODO items (there are many more below in the code)
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+import time
 import numpy as np
 from lsst.geom import Extent2D
 from lsst.afw.table import SourceCatalog, SchemaMapper
@@ -65,6 +73,27 @@ from pprint import pprint
 
 #__all__ = ("ProcessCoaddsNGMixConfig", "ProcessCoaddsNGMixTask")
 
+
+
+class MetacalConfig(Config):
+    """
+    configuration of metacalibration
+
+    we can add more options later
+    """
+    types = ListField(
+        dtype=str,
+        default=['noshear','1p','1m','2p','2m'],
+        optional=True,
+        doc='types of images to create',
+    )
+    symmetrize_psf = Field(
+        dtype=bool,
+        default=True,
+        optional=True,
+        doc='Use psf symmetrization',
+    )
+
 class StampsConfig(Config):
     """
     configuration for the postage stamps
@@ -83,6 +112,19 @@ class StampsConfig(Config):
         dtype=float,
         default=5.0,
         doc='make stamp radius this many sigma',
+    )
+
+    bits_to_ignore_for_weight = ListField(
+        dtype=str,
+        default=[],
+        doc='bits to ignore when calculating the background noise',
+    )
+
+
+    bits_to_null = ListField(
+        dtype=str,
+        default=[],
+        doc='bits to null in the weight map',
     )
 
 
@@ -179,7 +221,11 @@ class FracdevPriorConfig(Config):
         },
         doc="type of prior for fracdev",
     )
-    pars = ListField(dtype=float, doc="parameters for the fracdev prior")
+    pars = ListField(
+        dtype=float,
+        optional=True,
+        doc="parameters for the fracdev prior",
+    )
 
 class ObjectPriorsConfig(Config):
     """
@@ -191,7 +237,12 @@ class ObjectPriorsConfig(Config):
     flux = ConfigField(dtype=FluxPriorConfig, doc="prior on flux")
 
     # this is optional, only used by the bulge+disk fitter
-    fracdev = ConfigField(dtype=FracdevPriorConfig, doc="prior on fracdev")
+    fracdev = ConfigField(
+        dtype=FracdevPriorConfig,
+        default=None,
+        #optional=True,
+        doc="prior on fracdev",
+    )
 
 class MaxFitConfigBase(Config):
     """
@@ -247,20 +298,18 @@ class ObjectMaxFitConfig(MaxFitConfigBase):
         doc="priors for a maximum likelihood model fit",
     )
 
+
 class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     """
     basic config loads filters and misc stuff
     """
     filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
-    obj_range = ListField(dtype=int, default=None,
+    obj_range = ListField(dtype=int,
+                          default=None,
+                          optional=True,
                           doc="Do a test using the specified range of objects")
     stamps = ConfigField(dtype=StampsConfig, doc="configuration for postage stamps")
 
-    def setDefaults(self):
-        """
-        prefix for the output file
-        """
-        self.output.name = "deepCoadd_ngmix"
 
 class ProcessCoaddsNGMixMaxConfig(BasicProcessConfig):
     """
@@ -269,11 +318,30 @@ class ProcessCoaddsNGMixMaxConfig(BasicProcessConfig):
     psf = ConfigField(dtype=PSFMaxFitConfig, doc='psf fitting config')
     obj = ConfigField(dtype=ObjectMaxFitConfig,doc="object fitting config")
 
-    #def setDefaults(self):
-    #    """
-    #    TODO why is this specific to deepCoadd?
-    #    """
-    #    self.output.name = "deepCoadd_ngmix_max"
+    def setDefaults(self):
+        """
+        prefix for the output file
+
+        TODO why is this specific to deepCoadd?
+        """
+        self.output.name = "deepCoadd_ngmix"
+
+class ProcessCoaddsMetacalMaxConfig(BasicProcessConfig):
+    """
+    perform metacal using maximum likelihood
+    """
+    psf = ConfigField(dtype=PSFMaxFitConfig, doc='psf fitting config')
+    obj = ConfigField(dtype=ObjectMaxFitConfig,doc='object fitting config')
+    metacal = ConfigField(dtype=MetacalConfig,doc='metacal config')
+
+    def setDefaults(self):
+        """
+        prefix for the output file
+
+        TODO why is this specific to deepCoadd?
+        """
+        self.output.name = "deepCoadd_mcalmax"
+
 
 class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
     """
@@ -290,6 +358,143 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         if not hasattr(self,'_cdict'):
             self._cdict=self.config.toDict()
         return self._cdict
+
+    def run(self, images, ref, imageId):
+        """Process coadds from all bands for a single patch.
+
+        This method should not add or modify self.
+
+        So far all children are u sing this exact code so leaving
+        it here for now. If we specialize a lot, might make a 
+        processor its own object
+
+        Parameters
+        ----------
+        images : `dict` of `lsst.afw.image.ExposureF`
+            Coadd images and associated metadata, keyed by filter name.
+        ref : `lsst.afw.table.SourceCatalog`
+            A catalog with one record for each object, containing "best"
+            measurements across all bands.
+        imageId : `int`
+            Unique ID for this unit of data.  Should be used (possibly
+            indirectly) to seed random numbers.
+
+        Returns
+        -------
+        results : `lsst.pipe.base.Struct`
+            Struct with (at least) an `output` attribute that is a catalog
+            to be written as ``self.config.output``.
+        """
+
+        tm0 = time.time()
+        nproc = 0
+
+        self.set_rng(imageId)
+
+        config=self.cdict
+        pprint(config)
+
+        extractor = self._get_extractor(images)
+
+        # Make an empty catalog
+        output = SourceCatalog(self.schema)
+
+        # Add mostly-empty rows to it, copying IDs from the ref catalog.
+        output.extend(ref, mapper=self.mapper)
+
+        # TODO: set up noise replacers for using deblender outputs
+
+        for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
+            if config['obj_range'] is not None:
+                if n < config['obj_range'][0] or n > config['obj_range'][1]:
+                    continue
+            print(n)
+            nproc += 1
+
+            outRecord.setFootprint(None)  # copied from ref; don't need to write these again
+
+            mbobs = extractor.get_mbobs(refRecord)
+
+            res = self._process_observations(mbobs)
+            self._copy_result(mbobs, res, outRecord)
+
+        tm = time.time()-tm0
+        print('time: (min)',tm/60.0)
+        print('time per (sec):',tm/nproc)
+
+        return Struct(output=output)
+
+    def _process_observations(self, mbobs):
+        """
+        process the input observations
+
+        Parameters
+        ----------
+        mbobs: ngmix.MultiBandObsList
+            ngmix multi-band observation, or maybe list of them if
+            deblending.
+
+        Returns
+        -------
+        results : `dict`
+            Dictionary of outputs, with keys matching the fields added in
+            `defineSchema()`.
+        """
+        raise NotImplementedError('implement in child class')
+
+    def _get_bootstrapper(self, mbobs):
+        """
+        get a bootstrapper to automate the processing
+        """
+        raise NotImplementedError('implement in child class')
+
+    def _copy_result(self, mbobs, res, output):
+        """
+        copy the result dict to the output record
+        """
+        raise NotImplementedError('implement in child class')
+
+    def _get_extractor(self, images):
+        """
+        load the appropriate observation extractor
+        """
+        return MBObsExtractor(self.cdict, images)
+
+    @property
+    def rng(self):
+        """
+        get a ref to the random number generator
+        """
+        return self._rng
+
+    def set_rng(self, seed):
+        """
+        set a random number generator based on the input seed
+
+        parameters
+        ----------
+        seed: int
+            The seed for the random number generator
+        """
+        self._rng = np.random.RandomState(seed)
+
+    def _show(self, mbobs):
+        filters=self.cdict['filters']
+
+        imlist=[o[0].image for o in mbobs]
+        titles=[f for f in filters]
+
+        imlist += [o[0].weight for o in mbobs]
+        titles += [f+' wt' for f in filters]
+
+        imlist += [o[0].bmask for o in mbobs]
+        titles += [f+' bmask' for f in filters]
+
+        show_images(
+            imlist,
+            ncols=len(filters),
+            titles=titles,
+        )
 
 class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
     """
@@ -404,76 +609,15 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         return schema
 
-    def run(self, images, ref, imageId):
-        """Process coadds from all bands for a single patch.
-
-        This method should not add or modify self.
-
-        So far all children are u sing this exact code so leaving
-        it here for now. If we specialize a lot, might make a 
-        processor its own object
-
-        Parameters
-        ----------
-        images : `dict` of `lsst.afw.image.ExposureF`
-            Coadd images and associated metadata, keyed by filter name.
-        ref : `lsst.afw.table.SourceCatalog`
-            A catalog with one record for each object, containing "best"
-            measurements across all bands.
-        imageId : `int`
-            Unique ID for this unit of data.  Should be used (possibly
-            indirectly) to seed random numbers.
-
-        Returns
-        -------
-        results : `lsst.pipe.base.Struct`
-            Struct with (at least) an `output` attribute that is a catalog
-            to be written as ``self.config.output``.
+    def _process_observations(self, mbobs):
         """
-
-        self.set_rng(imageId)
-
-        config=self.cdict
-        pprint(config)
-
-        extractor = self._get_extractor(images)
-
-        # Make an empty catalog
-        output = SourceCatalog(self.schema)
-
-        # Add mostly-empty rows to it, copying IDs from the ref catalog.
-        output.extend(ref, mapper=self.mapper)
-
-        # TODO: set up noise replacers for using deblender outputs
-
-        for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
-            if config['obj_range'] is not None:
-                if n < config['obj_range'][0] or n > config['obj_range'][1]:
-                    continue
-            print(n)
-
-            outRecord.setFootprint(None)  # copied from ref; don't need to write these again
-
-            mbobs = extractor.get_mbobs(refRecord)
-
-            res = self._do_fits(mbobs)
-            self._copy_result(mbobs, res, outRecord)
-
-        return Struct(output=output)
-
-    def _get_extractor(self, images):
-        """
-        load the appropriate observation extractor
-        """
-        return MBObsExtractor(self.cdict, images)
-
-    def _do_fits(self, mbobs):
-        """Perform fits for a single object.
+        process the input observations
 
         Parameters
         ----------
         mbobs: ngmix.MultiBandObsList
-            ngmix multi-band observation
+            ngmix multi-band observation.  we may loosen this to be  alist
+            of them, for deblending
 
         Returns
         -------
@@ -483,14 +627,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
 
         if False:
-            imlist=[o[0].image for o in mbobs]
-            imlist += [o[0].weight for o in mbobs]
-            filters=self.cdict['filters']
-            show_images(
-                imlist,
-                ncols=len(filters),
-                titles=filters + [f+' wt' for f in filters]
-            )
+            self._show(mbobs)
 
         boot=self._get_bootstrapper(mbobs)
         boot.fit_psfs()
@@ -508,11 +645,9 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         get a bootstrapper to automate the processing
         """
-        config=self.cdict
         return bootstrap.MaxBootstrapper(
             mbobs,
-            config['psf'],
-            config['obj'],
+            self.cdict,
             self.prior,
             self.rng,
         )
@@ -523,7 +658,6 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         n=self.get_namer()
         stamp_shape = mbobs[0][0].image.shape
-        print('stamp shape:',stamp_shape)
         stamp_size=stamp_shape[0]
 
         output[n('flags')] = res['flags']
@@ -665,23 +799,344 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
 
     @property
-    def rng(self):
+    def prior(self):
         """
-        get a ref to the random number generator
+        set the joint prior used for object fitting
         """
-        return self._rng
+        if not hasattr(self, '_prior'):
+            # this is temporary until I can figure out how to get
+            # an existing seeded rng
 
-    def set_rng(self, seed):
-        """
-        set a random number generator based on the input seed
+            conf=self.cdict
+            nband=len(conf['filters'])
+            model=conf['obj']['model']
+            self._prior = priors.get_joint_prior(
+                conf['obj'],
+                nband,
+                self.rng,
+            )
 
-        parameters
+        return self._prior
+
+
+
+
+
+class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
+    _DefaultName = "processCoaddsMetacalMax"
+    ConfigClass = ProcessCoaddsMetacalMaxConfig
+
+    def defineSchema(self, refSchema):
+        """Return the Schema for the output catalog.
+
+        This may add or modify self.
+
+        Parameters
         ----------
-        seed: int
-            The seed for the random number generator
+        refSchema : `lsst.afw.table.Schema`
+            Schema of the input reference catalogs.
+
+        Returns
+        -------
+        outputSchema : `lsst.afw.table.Schema`
+            Schema of the output catalog.  Will be added as ``self.schema``
+            by calling code.
         """
-        self._rng = np.random.RandomState(seed)
-    
+        self.mapper = SchemaMapper(refSchema)
+        self.mapper.addMinimalSchema(SourceCatalog.Table.makeMinimalSchema(), True)
+        schema = self.mapper.getOutputSchema()
+
+        config=self.cdict
+
+        model=config['obj']['model']
+        n=self.get_namer()
+        pn=self.get_psf_namer()
+
+        # generic ngmix fields
+        mtypes=[
+            (n('flags'),'overall flags for the processing',np.int32,''),
+            (n('stamp_size'),'size of postage stamp',np.int32,''),
+        ]
+
+        # psf fitting related fields
+        mtypes += [
+            (pn('flags'),'overall flags for the PSF processing',np.int32,''),
+
+            # mean over filters
+            (pn('g2_mean'),'mean over filters of component 2 of the PSF ellipticity',np.float64,''),
+            (pn('g1_mean'),'mean over filters of component 2 of the PSF ellipticity',np.float64,''),
+            (pn('T_mean'),'mean over filters <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+        ]
+
+        # PSF measurements by filter
+        for filt in config['filters']:
+            pfn=self.get_psf_namer(filt=filt)
+            mtypes += [
+                (pfn('flags'), 'overall flags for PSF processing in %s filter' % filt, np.int32, ''),
+                (pfn('g1'), 'component 1 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
+                (pfn('g2'), 'component 2 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
+                (pfn('T'), '<x^2> + <y^2> for the PSF in %s filter' % filt, np.float64, 'arcsec^2'),
+            ]
+
+        # PSF flux measurements, on the object, by filter
+        #for filt in config['filters']:
+        #    pfn=self.get_psf_flux_namer(filt)
+        #    mtypes += [
+        #        (pfn('flux_flags'),'flags for PSF template flux fitting in the %s filter' % filt,np.float64,''),
+        #        (pfn('flux'),'PSF template flux in the %s filter' % filt,np.float64,''),
+        #        (pfn('flux_err'),'error on PSF template flux in the %s filter' % filt,np.float64,''),
+        #    ]
+
+        # object fitting related fields
+        for type in config['metacal']['types']:
+            mn=self.get_model_namer(type=type)
+            mtypes += [
+                (mn('flags'),'flags for model fit',np.int32,''),
+                (mn('nfev'),'number of function evaluations during fit',np.int32,''),
+                (mn('chi2per'),'chi^2 per degree of freedom',np.float64,''),
+                (mn('dof'),'number of degrees of freedom',np.int32,''),
+
+                (mn('s2n'),'S/N for the fit',np.float64,''),
+
+                (mn('row'),'offset from canonical row position',np.float64,'arcsec'),
+                (mn('row_err'),'error on offset from canonical row position',np.float64,'arcsec'),
+                (mn('col'),'offset from canonical col position',np.float64,'arcsec'),
+                (mn('col_err'),'error on offset from canonical col position',np.float64,'arcsec'),
+                (mn('g1'),'component 1 of the ellipticity',np.float64,''),
+                (mn('g1_err'),'error on component 1 of the ellipticity',np.float64,''),
+                (mn('g2'),'component 2 of the ellipticity',np.float64,''),
+                (mn('g2_err'),'error on component 2 of the ellipticity',np.float64,''),
+                (mn('T'),'<x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+                (mn('T_err'),'error on <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+            ]
+            if model in ['bd','bdf']:
+                mtypes += [
+                    (mn('fracdev'),'fraction of light in the bulge',np.float64,''),
+                    (mn('fracdev_err'),'error on fraction of light in the bulge',np.float64,''),
+                ]
+
+            for filt in config['filters']:
+                mfn=self.get_model_flux_namer(filt, type=type)
+                mtypes += [
+                    (mfn('flux'),'flux in the %s filter' % filt,np.float64,''),
+                    (mfn('flux_err'),'error on flux in the %s filter' % filt,np.float64,''),
+                ]
+
+        for name,doc,dtype,units in mtypes:
+            schema.addField(
+                name,
+                type=dtype,
+                doc=doc,
+                units=units,
+            )
+
+        return schema
+
+    def _process_observations(self, mbobs):
+        """
+        process the input observations
+
+        Parameters
+        ----------
+        mbobs: ngmix.MultiBandObsList
+            ngmix multi-band observation.  we may loosen this to be  alist
+            of them, for deblending
+
+        Returns
+        -------
+        results : `dict`
+            Dictionary of outputs, with keys matching the fields added in
+            `defineSchema()`.
+        """
+
+        if False:
+            self._show(mbobs)
+
+        boot=self._get_bootstrapper(mbobs)
+        boot.go()
+        return boot.result
+
+    def _get_bootstrapper(self, mbobs):
+        """
+        get a bootstrapper to automate the processing
+        """
+        return bootstrap.MetacalMaxBootstrapper(
+            mbobs,
+            self.cdict,
+            self.prior,
+            self.rng,
+        )
+
+    def _copy_result(self, mbobs, res, output):
+        """
+        copy the result dict to the output record
+        """
+        return
+
+        n=self.get_namer()
+        stamp_shape = mbobs[0][0].image.shape
+        stamp_size=stamp_shape[0]
+
+        output[n('flags')] = res['flags']
+        output[n('stamp_size')] = stamp_size
+
+        self._copy_psf_fit_result(res['psf'], output)
+        self._copy_psf_fit_results_byband(res['psf'], output)
+        self._copy_psf_flux_results_byband(res['psf_flux'], output)
+
+        self._copy_model_result(res['obj'], output)
+
+    def _copy_psf_fit_result(self, pres, output):
+        """
+        copy the PSF result dict to the output record.
+        The statistics here are averaged over all bands
+        """
+
+        n=self.get_psf_namer()
+        output[n('flags')] = pres['flags']
+        if pres['flags'] == 0:
+            output[n('g1_mean')] = pres['g1_mean']
+            output[n('g2_mean')] = pres['g2_mean']
+            output[n('T_mean')]  = pres['T_mean']
+
+    def _copy_psf_fit_results_byband(self, pres, output):
+        """
+        copy the PSF result from each band to the output record.
+        """
+
+        config=self.cdict
+        for ifilt,filt in enumerate(config['filters']):
+            filt_res = pres['byband'][ifilt]
+
+            if filt_res is not None:
+                n=self.get_psf_namer(filt=filt)
+
+                output[n('flags')] = filt_res['flags']
+                if filt_res['flags']==0:
+                    for name in ['g1','g2','T']:
+                        output[n(name)] = filt_res[name]
+
+    def _copy_psf_flux_results_byband(self, pres, output):
+        """
+        copy the PSF flux fitting results from each band to the output record.
+        """
+
+        config=self.cdict
+        for ifilt,filt in enumerate(config['filters']):
+            filt_res = pres['byband'][ifilt]
+
+            if filt_res is not None:
+                n=self.get_psf_flux_namer(filt=filt)
+
+                output[n('flux_flags')] = filt_res['flags']
+                if filt_res['flags']==0:
+                    output[n('flux')] = filt_res['flux']
+                    output[n('flux_err')] = filt_res['flux_err']
+
+
+    def _copy_model_result(self, ores, output):
+        """
+        copy the model fitting result dict to the output record.
+        """
+
+        config=self.cdict
+
+        mn=self.get_model_namer()
+        output[mn('flags')] = ores['flags']
+
+        if 'nfev' in ores:
+            # can be there even if the fit failed, but won't be there
+            # if it wasn't attempted
+            output[mn('nfev')] = ores['nfev']
+
+        if ores['flags']==0:
+            for n in ['chi2per','dof','s2n']:
+                output[mn(n)] = ores[n]
+
+            ni=[('row',0),('col',1),('g1',2),('g2',3),('T',4)]
+            if self.cdict['obj']['model'] in ['bd','bdf']:
+                ni += [('fracdev',5)]
+                flux_start=6
+            else:
+                flux_start=5
+
+            pars=ores['pars']
+            perr=ores['pars_err']
+            for n,i in ni:
+                output[mn(n)] = pars[i]
+                output[mn(n+'_err')] = perr[i]
+
+            for ifilt, filt in enumerate(config['filters']):
+
+                ind=flux_start+ifilt
+                mfn=self.get_model_flux_namer(filt)
+                output[mfn('flux')] = pars[ind]
+                output[mfn('flux_err')] = perr[ind]
+
+    def get_namer(self, type=None):
+        """
+        get a namer for this output type
+        """
+        front='mcal'
+
+        back=None
+        if type is not None:
+            if type=='noshear':
+                back=None
+            else:
+                back=type
+
+        return Namer(front='mcal', back=back)
+
+    def get_psf_namer(self, filt=None):
+        """
+        get a namer for this output type
+        """
+        front='mcal_psf'
+        if filt is not None:
+            front='%s_%s' % (front,filt)
+        return Namer(front=front)
+
+    def get_model_namer(self, type=None):
+        """
+        get a namer for this output type
+        """
+        config=self.cdict
+        model=config['obj']['model']
+
+        front='mcal_%s' % model
+
+        if type is not None:
+            if type=='noshear':
+                back=None
+            else:
+                back=type
+
+        return Namer(front=front, back=back)
+
+    def get_model_flux_namer(self, filt, type=None):
+        """
+        get a namer for this output type
+        """
+        config=self.cdict
+        model=config['obj']['model']
+        front='mcal_%s' % model
+        back=filt
+
+        if type is not None:
+            if type!='noshear':
+                back='%s_%s' % (back, type)
+
+        return Namer(front=front, back=back)
+
+    def get_psf_flux_namer(self, filt):
+        """
+        get a namer for this output type
+        """
+        raise NotImplementedError('make work for metacal')
+        front='mcal_psf'
+        return Namer(front=front, back=filt)
+
 
     @property
     def prior(self):
@@ -702,6 +1157,11 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             )
 
         return self._prior
+
+
+
+
+
 
 
 class MBObsExtractor(object):
@@ -747,15 +1207,13 @@ class MBObsExtractor(object):
             bbox = self._get_bbox(rec, imf)
             subim = _get_padded_sub_image(imf, bbox)
 
-            #obs = extract_obs(imf, rec, bbox)
-            #print("orig xy0:",imf.getXY0())
-            #print("centroid:",rec.getCentroid())
-            #print("coord:",rec.getCoord())
-            obs = extract_obs(subim, rec)
+            obs = self._extract_obs(subim, rec)
 
             obslist=ngmix.ObsList()
             obslist.append(obs)
             mbobs.append(obslist)
+
+        print('stamp shape:',mbobs[0][0].image.shape)
 
         return mbobs
 
@@ -812,6 +1270,193 @@ class MBObsExtractor(object):
 
         return radius, stamp_size
 
+
+
+    def _extract_obs(self, imobj_sub, rec):
+        """
+        convert an image object into an ngmix.Observation, including
+        a psf observation
+
+        parameters
+        ----------
+        imobj: an image object
+            TODO I don't actually know what class this is
+        rec: an object record
+            TODO I don't actually know what class this is
+            
+        returns
+        --------
+        obs: ngmix.Observation
+            The Observation, including 
+        """
+
+        im = imobj_sub.image.array
+        wt = self._extract_weight(imobj_sub)
+        bmask = imobj_sub.mask.array
+
+        #cen = rec.getCentroid()
+        orig_cen = imobj_sub.getWcs().skyToPixel(rec.getCoord())
+        psf_im = self._extract_psf_image(imobj_sub, orig_cen)
+        #psf_im = imobj_sub.getPsf().computeKernelImage(orig_cen).array
+
+        # fake the psf pixel noise
+        psf_err = psf_im.max()*0.0001
+        psf_wt = psf_im*0 + 1.0/psf_err**2
+        
+        jacob = self._extract_jacobian(imobj_sub, rec)
+
+        # use canonical center for the psf
+        psf_cen = (np.array(psf_im.shape)-1.0)/2.0
+        psf_jacob = jacob.copy()
+        psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
+
+        psf_obs = ngmix.Observation(
+            psf_im,
+            weight=psf_wt,
+            jacobian=psf_jacob,
+        )
+        obs = ngmix.Observation(
+            im,
+            weight=wt,
+            bmask=bmask,
+            jacobian=jacob,
+            psf=psf_obs,
+        )
+
+        return obs
+
+    def _extract_psf_image(self, stamp, orig_pos):
+        """
+        get the psf associated with this stamp
+        """
+        psfobj =stamp.getPsf()
+        psfim  = psfobj.computeKernelImage(orig_pos).array.astype('f4')
+        psfim  = np.array(psfim, dtype='f4', copy=False)
+
+        d=psfim.shape
+        if d[0] != d[1]:
+            if d[0] > d[1]:
+                bigger=d[0]
+                smaller=d[1]
+            else:
+                bigger=d[1]
+                smaller=d[0]
+
+            diff = bigger-smaller
+            assert (diff % 2) == 0
+
+            beg = diff//2
+            end = bigger - diff//2
+
+            if d[0] > d[1]:
+                psfim = psfim[beg:end,:]
+            else:
+                psfim = psfim[:,beg:end]
+
+        return psfim
+
+
+    def _extract_jacobian(self, imobj, rec):
+        """
+        extract an ngmix.Jacobian from the image object
+        and object record
+
+        imobj: an image object
+            TODO I don't actually know what class this is
+        rec: an object record
+            TODO I don't actually know what class this is
+            
+        returns
+        --------
+        Jacobian: ngmix.Jacobian
+            The local jacobian
+        """
+
+        xy0 = imobj.getXY0()
+        #print("xy0:",xy0)
+
+        orig_cen = imobj.getWcs().skyToPixel(rec.getCoord())
+        #orig_cen = rec.getCentroid()
+        cen = orig_cen - Extent2D(xy0)
+        row=cen.getY()
+        col=cen.getX()
+        #print("orig_cen:",orig_cen)
+        #print("row col:",row,col)
+
+        wcs = imobj.getWcs().linearizePixelToSky(
+            orig_cen,
+            afwGeom.arcseconds,
+        )
+        jmatrix = wcs.getLinear().getMatrix()
+
+        jacob = ngmix.Jacobian(
+            row=row,
+            col=col,
+            dudrow = jmatrix[0,0],
+            dudcol = jmatrix[0,1],
+            dvdrow = jmatrix[1,0],
+            dvdcol = jmatrix[1,1],
+        )
+
+        #print("jacob:",jacob)
+        return jacob
+
+
+    def _extract_weight(self, imobj):
+        """
+        TODO get the estimated sky variance rather than this hack
+        TODO should we zero out other bits?
+
+        extract a weight map
+
+        Areas with NO_DATA will get zero weight.
+
+        Because the variance map includes the full poisson variance, which
+        depends on the signal, we instead extract the median of the parts of
+        the image without NO_DATA set
+
+        parameters
+        ----------
+        imobj: an image object
+            TODO I don't actually know what class this is
+        """
+        var_image  = imobj.variance.array
+        maskobj = imobj.mask
+        mask = maskobj.array
+
+
+        weight = var_image.copy()
+
+        weight[:,:]=0
+
+        bitnames_to_ignore = self.config['stamps']['bits_to_ignore_for_weight']
+
+        bits_to_ignore=_get_ored_bits(maskobj, bitnames_to_ignore)
+
+        wuse=np.where(
+            (var_image > 0)
+            &
+            ( (mask & bits_to_ignore) == 0 )
+        )
+
+        if wuse[0].size > 0:
+            medvar = np.median(var_image[wuse])
+            weight[:,:] = 1.0/medvar
+        else:
+            print('weight is all zero, found none that passed cuts')
+            #_print_bits(maskobj, bitnames_to_ignore)
+
+        bitnames_to_null = self.config['stamps']['bits_to_null']
+        if len(bitnames_to_null) > 0:
+            bits_to_null=_get_ored_bits(maskobj, bitnames_to_null)
+            wnull=np.where( (mask & bits_to_null) != 0 )
+            if wnull[0].size > 0:
+                #print('    nulling:',wnull[0].size)
+                weight[wnull] = 0.0
+
+        return weight
+
+
     def _verify(self):
         """
         check for consistency between the images. 
@@ -831,195 +1476,6 @@ class MBObsExtractor(object):
         if set(self.images.keys()) != set(self.config['filters']):
             raise RuntimeError("One or more filters missing.")
 
-
-def extract_obs(imobj_sub, rec):
-    """
-    convert an image object into an ngmix.Observation, including
-    a psf observation
-
-    parameters
-    ----------
-    imobj: an image object
-        TODO I don't actually know what class this is
-    rec: an object record
-        TODO I don't actually know what class this is
-        
-    returns
-    --------
-    obs: ngmix.Observation
-        The Observation, including 
-    """
-
-    im = imobj_sub.image.array
-    wt = extract_weight(imobj_sub)
-
-    #cen = rec.getCentroid()
-    orig_cen = imobj_sub.getWcs().skyToPixel(rec.getCoord())
-    psf_im = imobj_sub.getPsf().computeKernelImage(orig_cen).array
-
-    # fake the psf pixel noise
-    psf_err = psf_im.max()*0.0001
-    psf_wt = psf_im*0 + 1.0/psf_err**2
-    
-    jacob = extract_jacobian(imobj_sub, rec)
-
-    # use canonical center for the psf
-    psf_cen = (np.array(psf_im.shape)-1.0)/2.0
-    psf_jacob = jacob.copy()
-    psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
-
-    psf_obs = ngmix.Observation(
-        psf_im,
-        weight=psf_wt,
-        jacobian=psf_jacob,
-    )
-    obs = ngmix.Observation(
-        im,
-        weight=wt,
-        jacobian=jacob,
-        psf=psf_obs,
-    )
-
-    return obs
-
-
-def extract_obs_old(imobj, rec, bbox):
-    """
-    convert an image object into an ngmix.Observation, including
-    a psf observation
-
-    parameters
-    ----------
-    imobj: an image object
-        TODO I don't actually know what class this is
-    rec: an object record
-        TODO I don't actually know what class this is
-        
-    returns
-    --------
-    obs: ngmix.Observation
-        The Observation, including 
-    """
-    imobj_sub = imobj[bbox]
-
-    im = imobj_sub.image.array
-    wt = extract_weight(imobj_sub)
-
-    cen = rec.getCentroid()
-    psf_im = imobj.getPsf().computeKernelImage(cen).array
-
-    # fake the psf pixel noise
-    psf_err = psf_im.max()*0.0001
-    psf_wt = psf_im*0 + 1.0/psf_err**2
-    
-    jacob = extract_jacobian(imobj_sub, rec)
-
-    # use canonical center for the psf
-    psf_cen = (np.array(psf_im.shape)-1.0)/2.0
-    psf_jacob = jacob.copy()
-    psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
-
-    psf_obs = ngmix.Observation(
-        psf_im,
-        weight=psf_wt,
-        jacobian=psf_jacob,
-    )
-    obs = ngmix.Observation(
-        im,
-        weight=wt,
-        jacobian=jacob,
-        psf=psf_obs,
-    )
-
-    return obs
-
-def extract_jacobian(imobj, rec):
-    """
-    extract an ngmix.Jacobian from the image object
-    and object record
-
-    imobj: an image object
-        TODO I don't actually know what class this is
-    rec: an object record
-        TODO I don't actually know what class this is
-        
-    returns
-    --------
-    Jacobian: ngmix.Jacobian
-        The local jacobian
-    """
-
-    xy0 = imobj.getXY0()
-    #print("xy0:",xy0)
-
-    orig_cen = imobj.getWcs().skyToPixel(rec.getCoord())
-    #orig_cen = rec.getCentroid()
-    cen = orig_cen - Extent2D(xy0)
-    row=cen.getY()
-    col=cen.getX()
-    #print("orig_cen:",orig_cen)
-    #print("row col:",row,col)
-
-    wcs = imobj.getWcs().linearizePixelToSky(
-        orig_cen,
-        afwGeom.arcseconds,
-    )
-    jmatrix = wcs.getLinear().getMatrix()
-
-    jacob = ngmix.Jacobian(
-        row=row,
-        col=col,
-        dudrow = jmatrix[0,0],
-        dudcol = jmatrix[0,1],
-        dvdrow = jmatrix[1,0],
-        dvdcol = jmatrix[1,1],
-    )
-
-    #print("jacob:",jacob)
-    return jacob
-
-
-def extract_weight(imobj):
-    """
-    TODO get the estimated sky variance rather than this hack
-    TODO should we zero out other bits?
-
-    extract a weight map
-
-    Areas with NO_DATA will get zero weight.
-
-    Because the variance map includes the full poisson variance, which
-    depends on the signal, we instead extract the median of the parts of
-    the image without NO_DATA set
-
-    parameters
-    ----------
-    imobj: an image object
-        TODO I don't actually know what class this is
-    """
-    var_image  = imobj.variance.array
-    maskobj = imobj.mask
-    mask = maskobj.array
-
-
-    weight = var_image.copy()
-
-    weight[:,:]=0
-
-    zlogic = var_image > 0
-
-    no_data_logic = np.logical_not(
-        mask & maskobj.getPlaneBitMask("NO_DATA")
-    )
-    w=np.where(zlogic & no_data_logic)
-
-    #print("ngood:",w[0].size)
-    if w[0].size > 0:
-        medvar = np.median(var_image[w])
-        weight[w] = 1.0/medvar
-
-    #print(weight)
-    return weight
 
 
 def _project_box(source, wcs, radius):
@@ -1089,7 +1545,8 @@ def show_images(images, ncols = 1, titles = None):
         titles = ['Image (%d)' % i for i in range(1,n_images + 1)]
 
     dpi=96
-    fig = plt.figure(figsize=(10,10), dpi=dpi)
+    width=20
+    fig = plt.figure(figsize=(width,width*nrows/ncols), dpi=dpi)
 
 
     for n, (image, title) in enumerate(zip(images, titles)):
@@ -1105,3 +1562,21 @@ def show_images(images, ncols = 1, titles = None):
     #fig.set_size_inches(np.array(fig.get_size_inches()) * n_images)
     plt.tight_layout()
     plt.show()
+
+def _get_ored_bits(maskobj, bitnames):
+    bits=0
+    for ibit,bitname in enumerate(bitnames):
+        bitval = maskobj.getPlaneBitMask(bitname)
+        bits |= bitval
+
+    return bits
+
+def _print_bits(maskobj, bitnames):
+    mask=maskobj.array
+    bits=0
+    for ibit,bitname in enumerate(bitnames):
+        bitval = maskobj.getPlaneBitMask(bitname)
+        w=np.where( (mask & bitval) != 0 )
+        if w[0].size > 0:
+            print('%s %d %d/%d' % (bitname,bitval,w[0].size,mask.size))
+
