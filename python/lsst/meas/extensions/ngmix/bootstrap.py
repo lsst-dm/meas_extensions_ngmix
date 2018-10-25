@@ -72,7 +72,7 @@ class MaxBootstrapper(BootstrapperBase):
             psf_obs = obs.psf
             runner = self._get_psf_runner(psf_obs, Tguess)
             runner.go(ntry=pconf['max_pars']['ntry'])
-            fitter=runner.get_fitter()
+            fitter=runner.fitter
             tres=fitter.get_result()
 
             pres['flags'] |= tres['flags']
