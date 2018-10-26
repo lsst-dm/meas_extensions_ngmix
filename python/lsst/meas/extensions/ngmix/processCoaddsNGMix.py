@@ -367,7 +367,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
             self._cdict=self.config.toDict()
         return self._cdict
 
-    def run(self, images, ref, imageId):
+    def run(self, images, ref, replacers, imageId):
         """Process coadds from all bands for a single patch.
 
         This method should not add or modify self.
@@ -383,6 +383,12 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         ref : `lsst.afw.table.SourceCatalog`
             A catalog with one record for each object, containing "best"
             measurements across all bands.
+        replacers : `dict` of `lsst.meas.base.NoiseReplacer`, optional
+            A dictionary of `~lsst.meas.base.NoiseReplacer` objects that can
+            be used to insert and remove deblended pixels for each object.
+            When not `None`, all detected pixels in ``images`` will have
+            *already* been replaced with noise, and this *must* be used
+            to restore objects one at a time.
         imageId : `int`
             Unique ID for this unit of data.  Should be used (possibly
             indirectly) to seed random numbers.
@@ -410,8 +416,6 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         # Add mostly-empty rows to it, copying IDs from the ref catalog.
         output.extend(ref, mapper=self.mapper)
 
-        # TODO: set up noise replacers for using deblender outputs
-
         for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
             if config['obj_range'] is not None:
                 if n < config['obj_range'][0] or n > config['obj_range'][1]:
@@ -421,10 +425,25 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
 
+            # Insert the deblended pixels for just this object into all images.
+            if replacers is not None:
+                for r in replacers.values():
+                    r.insertSource(refRecord.getId())
+
             mbobs = extractor.get_mbobs(refRecord)
 
             res = self._process_observations(mbobs)
             self._copy_result(mbobs, res, outRecord)
+
+            # Remove the deblended pixels for this object so we can process the next one.
+            if replacers is not None:
+                for r in replacers.values():
+                    r.removeSource(refRecord.getId())
+
+        # Restore all original pixels in the images.
+        if replacers is not None:
+            for r in replacers.values():
+                r.end()
 
         tm = time.time()-tm0
         print('time: (min)',tm/60.0)

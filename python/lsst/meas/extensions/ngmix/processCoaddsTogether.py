@@ -27,7 +27,8 @@ from lsst.pipe.base import (
     CmdLineTask, ArgumentParser,
     PipelineTask, InputDatasetField, OutputDatasetField, QuantumConfig,
 )
-from lsst.pex.config import Config
+from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
+from lsst.pex.config import Config, ConfigField, Field
 
 from lsst.coadd.utils.coaddDataIdContainer import ExistingCoaddDataIdContainer
 from lsst.pipe.tasks.multiBand import MergeSourcesRunner, getShortFilterName
@@ -45,7 +46,7 @@ class ProcessCoaddsTogetherConfig(Config):
         units=("Tract", "Patch", "AbstractFilter", "SkyMap")
     )
     ref = InputDatasetField(
-        doc="Coadd catalog DatasetType reference input (one instance across all bands)",
+        doc="Coadd catalog DatasetType reference input (one instance across all bands).",
         name="deepCoadd_ref",
         scalar=True,
         storageClass="SourceCatalog",
@@ -60,6 +61,24 @@ class ProcessCoaddsTogetherConfig(Config):
     )
     quantum = QuantumConfig(
         units=("Tract", "Patch", "SkyMap")
+    )
+    deblendReplacer = ConfigField(
+        dtype=NoiseReplacerConfig,
+        doc=("Details for how to replace neighbors with noise when applying deblender outputs. "
+             "Ignored if `useDeblending == False`.")
+    )
+    deblendCatalog = InputDatasetField(
+        doc=("Catalog DatasetType from which to extract deblended [Heavy]Footprints (one for each band). "
+             "Ignored if 'useDeblending == False'."),
+        name="deepCoadd_meas",
+        scalar=False,
+        storageClass="SourceCatalog",
+        units=("Tract", "Patch", "AbstractFilter", "SkyMap")
+    )
+    useDeblends = Field(
+        dtype=bool,
+        doc="Whether to apply deblender outputs by replacing neighboring sources with noise.",
+        default=True,
     )
 
 
@@ -123,18 +142,21 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
             A list of DataRefs for all filters in a single patch.
         """
         images = {}
-        butler = None
-        mergedDataId = {}
+        replacers = {} if self.config.useDeblends else None
+        mergedDataId = {"tract": patchRefList[0].dataId["tract"],
+                        "patch": patchRefList[0].dataId["patch"]}
+        butler = patchRefList[0].butlerSubset.butler
+        ref = butler.get("deepCoadd_ref", dataId=mergedDataId)
+        imageId = butler.get("deepMergedCoaddId", dataId=mergedDataId)
         for patchRef in patchRefList:
             filt = getShortFilterName(patchRef.dataId["filter"])
             images[filt] = patchRef.get(self.config.images.name)
-            if butler is None:
-                butler = patchRef.butlerSubset.butler
-                mergedDataId = {"tract": patchRef.dataId["tract"], "patch": patchRef.dataId["patch"]}
-        assert butler is not None
-        ref = butler.get("deepCoadd_ref", dataId=mergedDataId)
-        imageId = butler.get("deepMergedCoaddId", dataId=mergedDataId)
-        results = self.run(images, ref, imageId=imageId)
+            if self.config.useDeblends is not None:
+                fpCat = patchRef.get(self.config.deblendCatalog.name)
+                footprints = {rec.getId(): (rec.getParent(), rec.getFootprint()) for rec in fpCat}
+                replacers[filt] = NoiseReplacer(self.config.deblendReplacer, exposure=images[filt],
+                                                footprints=footprints, exposureId=imageId)
+        results = self.run(images, ref, imageId=imageId, replacers=replacers)
         butler.put(results.output, self.config.output.name, dataId=mergedDataId)
 
     def defineSchema(self, refSchema):
