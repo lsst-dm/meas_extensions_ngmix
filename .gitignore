@@ -16,3 +16,6 @@ doc/doxygen.conf
 doc/*aux
 doc/*log
 python/lsst/meas/extensions/ngmix/version.py
+bin/*
+.coverage
+.pytest_cache
