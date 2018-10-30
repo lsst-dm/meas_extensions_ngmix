@@ -312,11 +312,28 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     basic config loads filters and misc stuff
     """
     filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
-    obj_range = ListField(dtype=int,
-                          default=None,
-                          optional=True,
-                          doc="Do a test using the specified range of objects")
+
     stamps = ConfigField(dtype=StampsConfig, doc="configuration for postage stamps")
+
+    start_index = Field(
+        dtype=int,
+        default=0,
+        optional=True,
+        doc='optional starting index for the processin',
+    )
+    num_to_process = Field(
+        dtype=int,
+        default=9999999999999999,
+        optional=True,
+        doc='optional number to process',
+    )
+
+    make_plots = Field(
+        dtype=bool,
+        default=False,
+        optional=True,
+        doc='write some image plots to the CWD',
+    )
 
 
 class ProcessCoaddsNGMixMaxConfig(BasicProcessConfig):
@@ -416,10 +433,11 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         # Add mostly-empty rows to it, copying IDs from the ref catalog.
         output.extend(ref, mapper=self.mapper)
 
+        index_range=self.index_range
+
         for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
-            if config['obj_range'] is not None:
-                if n < config['obj_range'][0] or n > config['obj_range'][1]:
-                    continue
+            if n < index_range[0] or n > index_range[1]:
+                continue
             print(n)
             nproc += 1
 
@@ -450,6 +468,23 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         print('time per (sec):',tm/nproc)
 
         return Struct(output=output)
+
+    @property
+    def index_range(self):
+        """
+        Get the range of indices to process.  If these were not set in the
+        configuration, [0,huge_number] is returned
+        """
+        if not hasattr(self,'_index_range'):
+            start=self.cdict['start_index']
+            num=self.cdict['num_to_process']
+            if start is None:
+                start=0
+            if num is None:
+                num=9999999999999999
+            self._index_range=[start,start+num-1]
+
+        return self._index_range
 
     def _process_observations(self, mbobs):
         """
