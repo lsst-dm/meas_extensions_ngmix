@@ -321,11 +321,11 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
         dtype=int,
         default=0,
         optional=True,
-        doc='optional starting index for the processin',
+        doc='optional starting index for the processing',
     )
     num_to_process = Field(
         dtype=int,
-        default=9999999999999999,
+        default=None,
         optional=True,
         doc='optional number to process',
     )
