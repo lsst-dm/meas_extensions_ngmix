@@ -69,6 +69,8 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 from lsst.pex.config import Field, ListField, ConfigField, Config, ChoiceField
 from lsst.pipe.base import Struct
+import lsst.log
+
 
 from .processCoaddsTogether import ProcessCoaddsTogetherConfig, ProcessCoaddsTogetherTask
 from .util import Namer
@@ -77,7 +79,7 @@ from . import priors
 
 import ngmix
 
-from pprint import pprint
+import pprint
 
 #__all__ = ("ProcessCoaddsNGMixConfig", "ProcessCoaddsNGMixTask")
 
@@ -423,7 +425,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         self.set_rng(imageId)
 
         config=self.cdict
-        pprint(config)
+        self.log.info(pprint.pformat(config))
 
         extractor = self._get_extractor(images)
 
@@ -433,12 +435,13 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         # Add mostly-empty rows to it, copying IDs from the ref catalog.
         output.extend(ref, mapper=self.mapper)
 
-        index_range=self.index_range
+        index_range=self.get_index_range(output)
 
         for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
             if n < index_range[0] or n > index_range[1]:
                 continue
-            print(n)
+
+            self.log.info('index: %06d/%06d' % (n,index_range[1]))
             nproc += 1
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
@@ -464,24 +467,39 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
                 r.end()
 
         tm = time.time()-tm0
-        print('time: (min)',tm/60.0)
-        print('time per (sec):',tm/nproc)
+        self.log.info('time: %g min' % (tm/60.0))
+        self.log.info('time per: %g sec' % (tm/nproc))
 
         return Struct(output=output)
 
-    @property
-    def index_range(self):
+    def get_index_range(self, cat):
         """
         Get the range of indices to process.  If these were not set in the
         configuration, [0,huge_number] is returned
         """
         if not hasattr(self,'_index_range'):
+
+            ntot=len(cat)
             start=self.cdict['start_index']
             num=self.cdict['num_to_process']
             if start is None:
                 start=0
+            else:
+                if start < 0 or start > ntot-1:
+                    raise ValueError(
+                        'requested start index %d out '
+                        'of bounds [%d,%d]' % (start,ntot-1)
+                    )
+
             if num is None:
-                num=9999999999999999
+                num=ntot-start
+            if num < 1:
+                raise ValueError(
+                    'requested number to process %d '
+                    'less than 1' % num
+                )
+
+
             self._index_range=[start,start+num-1]
 
         return self._index_range
@@ -695,9 +713,9 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         boot.fit_psfs()
         boot.fit_psf_fluxes()
         if boot.result['psf']['flags'] !=0:
-            print('skipping model fit due psf fit failure')
+            self.log.info('    skipping model fit due psf fit failure')
         elif boot.result['psf_flux']['flags']!=0:
-            print('skipping model fit due psf flux fit failure')
+            self.log.info('    skipping model fit due psf flux fit failure')
         else:
             boot.fit_model()
 
@@ -1244,6 +1262,7 @@ class MBObsExtractor(object):
     def __init__(self, config, images):
         self.config=config
         self.images=images
+        self.log=lsst.log.Log.getLogger("meas.extensions.ngmix.MBObsExtractor")
 
         self._verify()
 
@@ -1280,7 +1299,7 @@ class MBObsExtractor(object):
             obslist.append(obs)
             mbobs.append(obslist)
 
-        print('stamp shape:',mbobs[0][0].image.shape)
+        self.log.debug('    stamp shape: %s' % str(mbobs[0][0].image.shape))
 
         return mbobs
 
@@ -1302,11 +1321,8 @@ class MBObsExtractor(object):
         """
 
         stamp_radius, stamp_size = self._compute_stamp_size(rec)
-        #print('stamp radius:',stamp_radius,'size:',stamp_size)
         bbox = _project_box(rec, imobj.getWcs(), stamp_radius)
         return bbox
-
-        #return afwGeom.Box2I(rec.getFootprint().getBBox())
 
     def _compute_stamp_size(self, rec):
         """
@@ -1324,7 +1340,6 @@ class MBObsExtractor(object):
             T=4.0
 
         sigma = np.sqrt(T/2.0)
-        #print('object fwhm:',sigma*2.35,'sigma:',sigma)
         radius = sconf['sigma_factor']*sigma
 
         if radius < min_radius:
@@ -1440,15 +1455,11 @@ class MBObsExtractor(object):
         """
 
         xy0 = imobj.getXY0()
-        #print("xy0:",xy0)
 
         orig_cen = imobj.getWcs().skyToPixel(rec.getCoord())
-        #orig_cen = rec.getCentroid()
         cen = orig_cen - Extent2D(xy0)
         row=cen.getY()
         col=cen.getX()
-        #print("orig_cen:",orig_cen)
-        #print("row col:",row,col)
 
         wcs = imobj.getWcs().linearizePixelToSky(
             orig_cen,
@@ -1465,7 +1476,7 @@ class MBObsExtractor(object):
             dvdcol = jmatrix[1,1],
         )
 
-        #print("jacob:",jacob)
+        self.log.debug("jacob: %s" % repr(jacob))
         return jacob
 
 
@@ -1510,7 +1521,7 @@ class MBObsExtractor(object):
             medvar = np.median(var_image[wuse])
             weight[:,:] = 1.0/medvar
         else:
-            print('weight is all zero, found none that passed cuts')
+            self.log.info('    weight is all zero, found none that passed cuts')
             #_print_bits(maskobj, bitnames_to_ignore)
 
         bitnames_to_null = self.config['stamps']['bits_to_null']
@@ -1518,7 +1529,7 @@ class MBObsExtractor(object):
             bits_to_null=_get_ored_bits(maskobj, bitnames_to_null)
             wnull=np.where( (mask & bits_to_null) != 0 )
             if wnull[0].size > 0:
-                #print('    nulling:',wnull[0].size)
+                self.log.debug('    nulling %d in weight' % wnull[0].size)
                 weight[wnull] = 0.0
 
         return weight
