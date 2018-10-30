@@ -12,6 +12,8 @@
 
 # write out some diagnostic plots to the CWD, defaults to False
 #config.make_plots: False
+# a prefix to add to plot names
+#config.plot_prefix='./plots/'
 
 #
 # postage stamp config
