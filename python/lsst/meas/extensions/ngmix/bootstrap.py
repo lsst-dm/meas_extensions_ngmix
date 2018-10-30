@@ -135,7 +135,7 @@ class MaxBootstrapper(BootstrapperBase):
                 tres=fitter.get_result()
 
             if tres['flags'] != 0:
-                logger.info('psf flux fit failed:' % tres['flags'])
+                logger.info('psf flux fit failed: %s' % tres['flags'])
                 pfres['flags'] |= procflags.PSF_FLUX_FIT_FAILURE 
                 res['flags'] |= procflags.PSF_FLUX_FIT_FAILURE 
 
