@@ -1,6 +1,17 @@
+# don't use the deblended coadds
+config.useDeblends = False
+
 # optionally limit the number of objects we process
 # the range is inclusive, not like a slice
-config.obj_range = [0, 9]
+
+# first index to process (defaults to 0).  Index could be an object
+# index or a group index, etc.
+#config.start_index = 1000
+# number to process (defaults to everything after start_index)
+#config.num_to_process = 10
+
+# write out some diagnostic plots to the CWD, defaults to False
+#config.make_plots: False
 
 #
 # postage stamp config
