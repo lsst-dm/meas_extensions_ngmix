@@ -334,8 +334,15 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
         dtype=bool,
         default=False,
         optional=True,
-        doc='write some image plots to the CWD',
+        doc='write some image plots',
     )
+    plot_prefix= Field(
+        dtype=str,
+        default=None,
+        optional=True,
+        doc='prefix to add to plot names',
+    )
+
 
 
 class ProcessCoaddsNGMixMaxConfig(BasicProcessConfig):
@@ -453,7 +460,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
             mbobs = extractor.get_mbobs(refRecord)
 
-            res = self._process_observations(mbobs)
+            res = self._process_observations(ref['id'][n], mbobs)
             self._copy_result(mbobs, res, outRecord)
 
             # Remove the deblended pixels for this object so we can process the next one.
@@ -504,12 +511,14 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
         return self._index_range
 
-    def _process_observations(self, mbobs):
+    def _process_observations(self, id, mbobs):
         """
         process the input observations
 
         Parameters
         ----------
+        id: int
+            ID of this observation
         mbobs: ngmix.MultiBandObsList
             ngmix multi-band observation, or maybe list of them if
             deblending.
@@ -558,7 +567,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         """
         self._rng = np.random.RandomState(seed)
 
-    def _show(self, mbobs):
+    def _make_plots(self, id, mbobs):
         filters=self.cdict['filters']
 
         imlist=[o[0].image for o in mbobs]
@@ -570,11 +579,20 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         imlist += [o[0].bmask for o in mbobs]
         titles += [f+' bmask' for f in filters]
 
-        show_images(
+        plt=make_image_plots(
+            id,
             imlist,
             ncols=len(filters),
             titles=titles,
+            show=False,
         )
+
+        fname='images-%d.png' % id
+        if self.cdict['plot_prefix'] is not None:
+            fname = self.cdict['plot_prefix'] + fname
+
+        self.log.info('saving figure: %s' % fname)
+        plt.savefig(fname)
 
 class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
     """
@@ -689,12 +707,14 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         return schema
 
-    def _process_observations(self, mbobs):
+    def _process_observations(self, id, mbobs):
         """
         process the input observations
 
         Parameters
         ----------
+        id: int
+            ID of this observation
         mbobs: ngmix.MultiBandObsList
             ngmix multi-band observation.  we may loosen this to be  alist
             of them, for deblending
@@ -706,8 +726,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             `defineSchema()`.
         """
 
-        if False:
-            self._show(mbobs)
+        if self.cdict['make_plots']:
+            self._make_plots(id, mbobs)
 
         boot=self._get_bootstrapper(mbobs)
         boot.fit_psfs()
@@ -1012,7 +1032,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 
         return schema
 
-    def _process_observations(self, mbobs):
+    def _process_observations(self, id, mbobs):
         """
         process the input observations
 
@@ -1024,13 +1044,15 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 
         Returns
         -------
+        id: int
+            ID of this observation
         results : `dict`
             Dictionary of outputs, with keys matching the fields added in
             `defineSchema()`.
         """
 
-        if False:
-            self._show(mbobs)
+        if self.cdict['make_plots']:
+            self._make_plots(id, mbobs)
 
         boot=self._get_bootstrapper(mbobs)
         boot.go()
@@ -1598,7 +1620,7 @@ def _get_padded_sub_image(original, bbox):
         raise ValueError("Image type not supported")
     return result
 
-def show_images(images, ncols = 1, titles = None):
+def make_image_plots(id, images, ncols = 1, titles = None, show=False):
     """Display a list of images in a single figure with matplotlib.
     
     Parameters
@@ -1626,7 +1648,9 @@ def show_images(images, ncols = 1, titles = None):
     width=20
     fig = plt.figure(figsize=(width,width*nrows/ncols), dpi=dpi)
 
-
+    fig.suptitle(
+        'id: %d' % id
+    )
     for n, (image, title) in enumerate(zip(images, titles)):
         a = fig.add_subplot(nrows, ncols, n + 1)
         if image.ndim == 2:
@@ -1639,7 +1663,9 @@ def show_images(images, ncols = 1, titles = None):
 
     #fig.set_size_inches(np.array(fig.get_size_inches()) * n_images)
     plt.tight_layout()
-    plt.show()
+    if show:
+        plt.show()
+    return plt
 
 def _get_ored_bits(maskobj, bitnames):
     bits=0
