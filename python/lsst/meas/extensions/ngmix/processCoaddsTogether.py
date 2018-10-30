@@ -78,6 +78,7 @@ class ProcessCoaddsTogetherConfig(Config):
     useDeblends = Field(
         dtype=bool,
         doc="Whether to apply deblender outputs by replacing neighboring sources with noise.",
+        optional=True,
         default=True,
     )
 
@@ -151,7 +152,7 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
         for patchRef in patchRefList:
             filt = getShortFilterName(patchRef.dataId["filter"])
             images[filt] = patchRef.get(self.config.images.name)
-            if self.config.useDeblends is not None:
+            if self.config.useDeblends:
                 fpCat = patchRef.get(self.config.deblendCatalog.name)
                 footprints = {rec.getId(): (rec.getParent(), rec.getFootprint()) for rec in fpCat}
                 replacers[filt] = NoiseReplacer(self.config.deblendReplacer, exposure=images[filt],
