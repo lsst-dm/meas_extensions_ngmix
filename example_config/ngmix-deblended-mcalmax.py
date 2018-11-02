@@ -1,5 +1,11 @@
+# really should cut objects that have high mask fraction
+# also maybe inexact_psf entirely, maybe not_deblended
+# but that might get caught by mask fraction?
+
+
 # defaults to True, use the deblended coadds
 #config.useDeblends = False
+
 
 # optionally limit the number of objects we process
 # the range is inclusive, not like a slice

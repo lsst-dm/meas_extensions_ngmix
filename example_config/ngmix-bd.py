@@ -43,6 +43,7 @@ config.stamps.sigma_factor = 5.0
 # by taking the median of the pixels without these bits
 # set.  we should probably exclude the pixels that are part
 # of the objects as well
+# DETECTED and NO_DATA are most important, DETECTED maybe not so important
 config.stamps.bits_to_ignore_for_weight = [
     # for coadd assume OK since will be interpolated on one of the epochs
     'BAD',
@@ -64,6 +65,7 @@ config.stamps.bits_to_ignore_for_weight = [
 
 # mask bits to null in the weight map. We need to think what we will do
 # for metacal here
+# in 10 year LSST might not matter as much (except for NO_DATA)
 config.stamps.bits_to_null = [
     # for coadd assume OK since will be interpolated on one of the epochs
     #'BAD',

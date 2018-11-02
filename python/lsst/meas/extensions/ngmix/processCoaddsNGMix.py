@@ -1,6 +1,9 @@
 """
 Some TODO items (there are many more below in the code)
 
+    - tag a new ngmix, make known to Jim
+        - numba needed too, talk to DC2 people (easy)
+
     - get a real estimate of the background noise. I am faking this
       by taking the median of the weight map, which includes the
       object poisson noise.  metacal is not tested with object poisson
@@ -11,14 +14,22 @@ Some TODO items (there are many more below in the code)
 
     - deal properly with the mask plane.  I've got something working
       but need someone to look it over.
+          - go look at ngmix-bd.py for more notes
 
     - add weighted moments
 
-    - normalize psf for flux fitting?
+    - psf for is supposed to be normalized, but might not be exactly.
+        - this is ok, just ignore
+
+    - maybe aperture corrections?
 
     - save all parameters for the PSF.  Because the number of parameters can
     vary a lot, this would require either very special code or saving an array
     (preferred for ease of coding)
+        - for now do an array
+        - key = schema.addField("name", doc="doc", type="ArrayF", size=0)
+         set size when schema defined?  yes, should be able to
+         based on the ngmix config
 
     - metacal
         - make sure we are doing the right thing with the weight map.
@@ -29,17 +40,11 @@ Some TODO items (there are many more below in the code)
 
     - add Tasks for multi-object fitting (MOF), which will require
       making stamps for multiple objects and fitting simultaneously
+          - let's start with the DM groups
 
     - move configuration stuff to a separate module
 
     - move ngmix Observation extractor stuff to a separate module
-
-    - get docs for the classes/structures that are input
-
-    - get proper exceptions to throw rather than asserts, if that
-    is preferred
-
-
 """
 #
 # Developed for the LSST Data Management System.

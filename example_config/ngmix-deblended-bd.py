@@ -57,7 +57,7 @@ config.stamps.bits_to_ignore_for_weight = [
     #'CLIPPED',
     'CROSSTALK',
     # only matter if we are using the deblended photometry, which we are not here
-    #'NOT_DEBLENDED',
+    'NOT_DEBLENDED',
     'UNMASKEDNAN',
 ]
 
