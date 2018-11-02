@@ -6,8 +6,13 @@ Some TODO items (there are many more below in the code)
       object poisson noise.  metacal is not tested with object poisson
       noise included
 
+    - also for the deblended coadds, there is noise missing because it gets
+      sucked into siblings
+
     - deal properly with the mask plane.  I've got something working
       but need someone to look it over.
+
+    - add weighted moments
 
     - normalize psf for flux fitting?
 
