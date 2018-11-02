@@ -72,6 +72,7 @@ import lsst.log
 
 
 from .processCoaddsTogether import ProcessCoaddsTogetherConfig, ProcessCoaddsTogetherTask
+from . import util
 from .util import Namer
 from . import bootstrap
 from . import priors
@@ -669,6 +670,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             pfn=self.get_psf_namer(filt=filt)
             mtypes += [
                 (pfn('flags'), 'overall flags for PSF processing in %s filter' % filt, np.int32, ''),
+                (pfn('row'),'offset from canonical row position',np.float64,'arcsec'),
+                (pfn('col'),'offset from canonical col position',np.float64,'arcsec'),
                 (pfn('g1'), 'component 1 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
                 (pfn('g2'), 'component 2 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
                 (pfn('T'), '<x^2> + <y^2> for the PSF in %s filter' % filt, np.float64, 'arcsec^2'),
@@ -815,6 +818,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
                 n=self.get_psf_namer(filt=filt)
 
                 output[n('flags')] = filt_res['flags']
+                output[n('row')] = filt_res['pars'][0]
+                output[n('col')] = filt_res['pars'][1]
                 if filt_res['flags']==0:
                     for name in ['g1','g2','T']:
                         output[n(name)] = filt_res[name]
@@ -991,6 +996,8 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             pfn=self.get_psf_namer(filt=filt)
             mtypes += [
                 (pfn('flags'), 'overall flags for PSF processing in %s filter' % filt, np.int32, ''),
+                (pfn('row'),'offset from canonical row position',np.float64,'arcsec'),
+                (pfn('col'),'offset from canonical col position',np.float64,'arcsec'),
                 (pfn('g1'), 'component 1 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
                 (pfn('g2'), 'component 2 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
                 (pfn('T'), '<x^2> + <y^2> for the PSF in %s filter' % filt, np.float64, 'arcsec^2'),
@@ -1132,6 +1139,8 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
                 n=self.get_psf_namer(filt=filt)
 
                 output[n('flags')] = filt_res['flags']
+                output[n('row')] = filt_res['pars'][0]
+                output[n('col')] = filt_res['pars'][1]
                 if filt_res['flags']==0:
                     for name in ['g1','g2','T']:
                         output[n(name)] = filt_res[name]
@@ -1499,31 +1508,16 @@ class MBObsExtractor(object):
     def _extract_psf_image(self, stamp, orig_pos):
         """
         get the psf associated with this stamp
+
+        coadded psfs are generally not square, so we will
+        trim it to be square and preserve the center to
+        be at the new canonical center
         """
-        psfobj =stamp.getPsf()
+        psfobj = stamp.getPsf()
         psfim  = psfobj.computeKernelImage(orig_pos).array
         psfim  = np.array(psfim, dtype='f4', copy=False)
 
-        d=psfim.shape
-        if d[0] != d[1]:
-            if d[0] > d[1]:
-                bigger=d[0]
-                smaller=d[1]
-            else:
-                bigger=d[1]
-                smaller=d[0]
-
-            diff = bigger-smaller
-            assert (diff % 2) == 0
-
-            beg = diff//2
-            end = bigger - diff//2
-
-            if d[0] > d[1]:
-                psfim = psfim[beg:end,:]
-            else:
-                psfim = psfim[:,beg:end]
-
+        psfim = util.trim_odd_image(psfim)
         return psfim
 
 
