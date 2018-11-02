@@ -13,7 +13,6 @@ Some TODO items (there are many more below in the code)
     - padding image with zeros because ngmix doesn't know about nan. OK?
     - different output file names for different tasks
     - normalize psf for flux fitting?
-    - set up logging
     - save all parameters for the PSF.  Because the number of parameters can
     vary a lot, this would require either very special code or saving an array
     (preferred for ease of coding)
@@ -97,11 +96,12 @@ class MetacalConfig(Config):
         optional=True,
         doc='types of images to create',
     )
-    symmetrize_psf = Field(
-        dtype=bool,
-        default=True,
+    psf = Field(
+        dtype=str,
+        default='fitgauss',
         optional=True,
-        doc='Use psf symmetrization',
+        doc=('Use round Gaussian for the PSF, based on a '
+             'fit to the PSF image'),
     )
 
 class StampsConfig(Config):
@@ -355,10 +355,20 @@ class ProcessCoaddsNGMixMaxConfig(BasicProcessConfig):
     def setDefaults(self):
         """
         prefix for the output file
-
-        TODO why is this specific to deepCoadd?
         """
         self.output.name = "deepCoadd_ngmix"
+
+class ProcessDeblendedCoaddsNGMixMaxConfig(ProcessCoaddsNGMixMaxConfig):
+    """
+    fit the object and PSF using maximum likelihood
+    """
+
+    def setDefaults(self):
+        """
+        prefix for the output file
+        """
+        self.output.name = "deepCoadd_ngmix_deblended"
+
 
 class ProcessCoaddsMetacalMaxConfig(BasicProcessConfig):
     """
@@ -371,10 +381,20 @@ class ProcessCoaddsMetacalMaxConfig(BasicProcessConfig):
     def setDefaults(self):
         """
         prefix for the output file
-
-        TODO why is this specific to deepCoadd?
         """
         self.output.name = "deepCoadd_mcalmax"
+
+class ProcessDeblendedCoaddsMetacalMaxConfig(ProcessCoaddsMetacalMaxConfig):
+    """
+    perform metacal using maximum likelihood on deblended coadds
+    """
+
+    def setDefaults(self):
+        """
+        prefix for the output file
+        """
+        self.output.name = "deepCoadd_mcalmax_deblended"
+
 
 
 class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
@@ -920,8 +940,6 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
 
 
-
-
 class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
     _DefaultName = "processCoaddsMetacalMax"
     ConfigClass = ProcessCoaddsMetacalMaxConfig
@@ -1265,11 +1283,60 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 
         return self._prior
 
+#
+# versions for deblended coadds
+# we need an entirely new class to write a different output file
+#
+
+class ProcessDeblendedCoaddsNGMixMaxTask(ProcessCoaddsNGMixMaxTask):
+    """
+    need a different class to write a file with a different name.  This
+    one is for deblended coadds
+    """
+    _DefaultName = "processDeblendedCoaddsNGMixMax"
+    ConfigClass = ProcessDeblendedCoaddsNGMixMaxConfig
+
+    def run(self, images, ref, replacers, imageId):
+        """
+        make sure we are using the deblended images
+        """
+        check = (
+            replacers is not None
+            and
+            self.cdict['useDeblends'] is True
+        )
+        assert check,\
+            'You must set useDeblends=True and send noise replacers'
+
+        return super(ProcessDeblendedCoaddsNGMixMaxTask,self).run(
+            images, ref, replacers, imageId,
+        )
 
 
 
+class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
+    """
+    need a different class to write a file with a different name.  This
+    one is for deblended coadds
+    """
+    _DefaultName = "processDeblendedCoaddsMetacalMax"
+    ConfigClass = ProcessDeblendedCoaddsMetacalMaxConfig
 
+    def run(self, images, ref, replacers, imageId):
+        """
+        make sure we are using the deblended images
+        """
+        check = (
+            replacers is not None
+            and
+            self.cdict['useDeblends'] is True
+        )
+        assert check,\
+            'You must set useDeblends=True and send noise replacers'
 
+        return super(ProcessDeblendedCoaddsMetacalMaxTask,self).run(
+            images, ref, replacers, imageId,
+        )
 
 class MBObsExtractor(object):
     """
@@ -1434,7 +1501,7 @@ class MBObsExtractor(object):
         get the psf associated with this stamp
         """
         psfobj =stamp.getPsf()
-        psfim  = psfobj.computeKernelImage(orig_pos).array.astype('f4')
+        psfim  = psfobj.computeKernelImage(orig_pos).array
         psfim  = np.array(psfim, dtype='f4', copy=False)
 
         d=psfim.shape

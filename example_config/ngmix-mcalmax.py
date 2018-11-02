@@ -150,5 +150,5 @@ config.psf.max_pars.lm_pars.xtol=5.0e-5
 config.psf.max_pars.lm_pars.ftol=5.0e-5
 
 # metacal pars (using the default)
-#config.metacal.symmetrize_psf=True
+#config.metacal.psf='fitgauss'
 #config.metacal.types=['noshear','1p','1m','2p','2m']
