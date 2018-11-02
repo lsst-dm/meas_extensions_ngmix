@@ -1,43 +1,40 @@
 """
 Some TODO items (there are many more below in the code)
 
-    - see if this trimmed PSF is off-center now.  This can cause problems for
-    metacal PSF treatment
-
     - get a real estimate of the background noise. I am faking this
       by taking the median of the weight map, which includes the
       object poisson noise.  metacal is not tested with object poisson
       noise included
+
     - deal properly with the mask plane.  I've got something working
       but need someone to look it over.
-    - padding image with zeros because ngmix doesn't know about nan. OK?
-    - different output file names for different tasks
+
     - normalize psf for flux fitting?
+
     - save all parameters for the PSF.  Because the number of parameters can
     vary a lot, this would require either very special code or saving an array
     (preferred for ease of coding)
 
-    - get docs for the classes/structures that are input
-    - get proper exceptions to throw rather than asserts, if that
-    is preferred
-
-    - move configuration stuff to a separate module
-    - move ngmix Observation extractor stuff to a separate module
-
-    - add Tasks for basic metacal
+    - metacal
         - make sure we are doing the right thing with the weight map.
         - This means checking to see that the underlying metacal
         code is working appropriately.
         - also need to record somewhere an amount of masking that
         is in place so we can cut on that.
 
-    - add Tasks that work on deblended coadds, including for metacal
-
     - add Tasks for multi-object fitting (MOF), which will require
       making stamps for multiple objects and fitting simultaneously
 
-    - find out how to send command line arguments, e.g. to show
-      images during testing
+    - move configuration stuff to a separate module
+
+    - move ngmix Observation extractor stuff to a separate module
+
+    - get docs for the classes/structures that are input
+
+    - get proper exceptions to throw rather than asserts, if that
+    is preferred
+
+
 """
 #
 # Developed for the LSST Data Management System.
