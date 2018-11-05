@@ -4,7 +4,12 @@ import unittest
 import lsst.utils.tests
 
 class NGMixTestCase(lsst.utils.tests.TestCase):
-    """Tests for conversions between similar ngmix and LSST objects.
+    """
+    currently this just runs some tests on ngmix, and
+    tries to import the module lsst.meas.extensions.ngmix
+
+    We need a simple way to send mock data to do further
+    tests
     """
 
     def setUp(self):
