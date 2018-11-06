@@ -5,7 +5,7 @@ GAL_FIT_FAILURE      = 2**2
 
 # flags used by NGMixer
 #BAD_OBJ              = 2**25
-#IMAGE_FLAGS          = 2**26
+IMAGE_FLAGS          = 2**26
 #NO_CUTOUTS           = 2**27
 #BOX_SIZE_TOO_BIG     = 2**28
 #UTTER_FAILURE        = 2**29
