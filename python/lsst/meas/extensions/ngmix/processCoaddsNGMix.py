@@ -83,12 +83,18 @@ from . import util
 from .util import Namer
 from . import bootstrap
 from . import priors
+from . import procflags
 
 import ngmix
 
 import pprint
 
-#__all__ = ("ProcessCoaddsNGMixConfig", "ProcessCoaddsNGMixTask")
+__all__ = (
+    'ProcessCoaddsNGMixMaxTask',
+    'ProcessCoaddsMetacalMaxTask',
+    'ProcessDeblendedCoaddsNGMixMaxTask',
+    'ProcessDeblendedCoaddsMetacalMaxTask',
+)
 
 
 
@@ -145,6 +151,17 @@ class StampsConfig(Config):
         doc='bits to null in the weight map',
     )
 
+    bits_to_cut = ListField(
+        dtype=str,
+        default=[],
+        doc='do not process objects that have these bits set',
+    )
+
+    max_zero_weight_frac = Field(
+        dtype=float,
+        default=0.45,
+        doc='max allowed fraction of stamp with zero weight',
+    )
 
 
 
@@ -489,6 +506,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
             mbobs = extractor.get_mbobs(refRecord)
 
             res = self._process_observations(ref['id'][n], mbobs)
+
             self._copy_result(mbobs, res, outRecord)
 
             # Remove the deblended pixels for this object so we can process the next one.
@@ -507,10 +525,78 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
         return Struct(output=output)
 
+    def _check_obs(self, mbobs):
+        """
+        check for image bits that we skip, mask fraction, and
+        other things
+        """
+
+        return (
+            self._check_bitmask(mbobs)
+            and
+            self._check_masked_frac(mbobs)
+        )
+
+    def _check_bitmask(self, mbobs):
+        """
+        check to see if bits are set that we do not allow
+        in the postage stamp
+        """
+        bitnames_to_cut = self.cdict['stamps']['bits_to_cut']
+        for obslist in mbobs:
+            for obs in obslist:
+
+                if len(bitnames_to_cut) > 0:
+                    maskobj = obs.meta['maskobj']
+                    bits_to_cut=_get_ored_bits(maskobj, bitnames_to_cut)
+                    w=np.where( (obs.bmask & bits_to_cut) != 0 )
+                    if w[0].size > 0:
+                        self.log.info(
+                            'setting IMAGE_FLAGS '
+                            'because one of these '
+                            'are set %s' % str(bitnames_to_cut)
+                        )
+                        return False
+
+        return True
+
+    def _check_masked_frac(self, mbobs):
+        """
+        check to see if the masked fraction is too high
+        in any of the stamps
+        """
+        mzfrac = self.cdict['stamps']['max_zero_weight_frac']
+        if mzfrac >= 1.0:
+            return True
+
+        for obslist in mbobs:
+            for obs in obslist:
+
+                w=np.where(obs.weight <= 0.0)
+                frac = w[0].size/float(obs.weight.size)
+                if frac > mzfrac:
+                    self.log.info(
+                        'setting IMAGE_FLAGS '
+                        'because zero weight frac '
+                        'exceeds max: %g > %g' % (frac,mzfrac)
+                    )
+                    return False
+
+
+        return True
+
+
+
+    def _get_default_result(self):
+        """
+        get the default result dict
+        """
+        raise NotImplementedError('implement in child class')
+
     def get_index_range(self, cat):
         """
         Get the range of indices to process.  If these were not set in the
-        configuration, [0,huge_number] is returned
+        configuration, [0,cat.size] is returned
         """
         if not hasattr(self,'_index_range'):
 
@@ -755,9 +841,14 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             Dictionary of outputs, with keys matching the fields added in
             `defineSchema()`.
         """
-
         if self.cdict['make_plots']:
             self._make_plots(id, mbobs)
+
+
+        if not self._check_obs(mbobs):
+            res=self._get_default_result()
+            res['flags'] = procflags.IMAGE_FLAGS
+            return res
 
         boot=self._get_bootstrapper(mbobs)
         boot.fit_psfs()
@@ -781,6 +872,12 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             self.prior,
             self.rng,
         )
+
+    def _get_default_result(self):
+        """
+        get the default result dict
+        """
+        return bootstrap.get_default_result()
 
     def _copy_result(self, mbobs, res, output):
         """
@@ -1086,6 +1183,11 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         if self.cdict['make_plots']:
             self._make_plots(id, mbobs)
 
+        if not self._check_obs(mbobs):
+            res=self._get_default_result()
+            res['mcal_flags'] = procflags.IMAGE_FLAGS
+            return res
+
         boot=self._get_bootstrapper(mbobs)
         boot.go()
         return boot.result
@@ -1100,6 +1202,12 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             self.prior,
             self.rng,
         )
+
+    def _get_default_result(self):
+        """
+        get the default result dict
+        """
+        return bootstrap.get_default_mcal_result()
 
     def _copy_result(self, mbobs, res, output):
         """
@@ -1138,6 +1246,9 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         copy the PSF result from each band to the output record.
         """
 
+        if len(pres['byband'])==0:
+            return
+
         config=self.cdict
         for ifilt,filt in enumerate(config['filters']):
             filt_res = pres['byband'][ifilt]
@@ -1146,16 +1257,19 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
                 n=self.get_psf_namer(filt=filt)
 
                 output[n('flags')] = filt_res['flags']
-                output[n('row')] = filt_res['pars'][0]
-                output[n('col')] = filt_res['pars'][1]
-                if filt_res['flags']==0:
-                    for name in ['g1','g2','T']:
-                        output[n(name)] = filt_res[name]
+                if filt_res['flags'] == 0:
+                    output[n('row')] = filt_res['pars'][0]
+                    output[n('col')] = filt_res['pars'][1]
+                    if filt_res['flags']==0:
+                        for name in ['g1','g2','T']:
+                            output[n(name)] = filt_res[name]
 
     def _copy_psf_flux_results_byband(self, pres, output):
         """
         copy the PSF flux fitting results from each band to the output record.
         """
+        if len(pres['byband'])==0:
+            return
 
         config=self.cdict
         for ifilt,filt in enumerate(config['filters']):
@@ -1479,7 +1593,8 @@ class MBObsExtractor(object):
 
         im = imobj_sub.image.array
         wt = self._extract_weight(imobj_sub)
-        bmask = imobj_sub.mask.array
+        maskobj = imobj_sub.mask
+        bmask = maskobj.array
 
         #cen = rec.getCentroid()
         orig_cen = imobj_sub.getWcs().skyToPixel(rec.getCoord())
@@ -1497,6 +1612,12 @@ class MBObsExtractor(object):
         psf_jacob = jacob.copy()
         psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
 
+        # we will have need of the bit names which we can only
+        # get from the mask object
+        # this is sort of monkey patching, but I'm not sure of
+        # a better solution
+        meta = {'maskobj':maskobj}
+
         psf_obs = ngmix.Observation(
             psf_im,
             weight=psf_wt,
@@ -1508,6 +1629,7 @@ class MBObsExtractor(object):
             bmask=bmask,
             jacobian=jacob,
             psf=psf_obs,
+            meta=meta,
         )
 
         return obs
