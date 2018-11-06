@@ -11,7 +11,56 @@ import ngmix
 from ngmix.gexceptions import GMixRangeError, BootPSFFailure, BootGalFailure
 from . import procflags
 
+from copy import deepcopy
+
 logger=lsst.log.Log.getLogger("meas.extensions.ngmix.bootstrap")
+
+DEFAULT_RESULT = {
+    # overall processing flags
+    'flags':procflags.NO_ATTEMPT,
+
+    # psf fitting related information
+    'psf':{
+        'flags':procflags.NO_ATTEMPT,
+        'byband':[],
+    },
+
+    # psf flux fitting related information
+    'psf_flux':{
+        'flags':procflags.NO_ATTEMPT,
+        'byband':[],
+    },
+
+    # object fitting related information
+    'obj': {
+        'flags':procflags.NO_ATTEMPT,
+    }
+}
+
+DEFAULT_MCAL_RESULT = {
+    'mcal_flags': procflags.NO_ATTEMPT,
+    'noshear': {},
+    '1p': {},
+    '1m': {},
+    '2p': {},
+    '2m': {},
+}
+for type in DEFAULT_MCAL_RESULT:
+    if type not in['mcal_flags']:
+        DEFAULT_MCAL_RESULT[type] = deepcopy(DEFAULT_RESULT)
+
+def get_default_result():
+    """
+    get the default result dict for fitting
+    """
+    return deepcopy(DEFAULT_RESULT)
+
+def get_default_mcal_result():
+    """
+    get the default result dict for metacal
+    """
+    return deepcopy(DEFAULT_MCAL_RESULT)
+
 
 class BootstrapperBase(object):
     """
@@ -252,6 +301,7 @@ class MaxBootstrapper(BootstrapperBase):
 
         Tguess=self.result['psf']['T_mean']
         flux_guesses = [t['flux'] for t in pfres['byband']]
+
         if self.config['obj']['model'] in ['bd','bdf']:
             guesser=ngmix.guessers.BDFGuesser(
                 Tguess,
@@ -268,28 +318,7 @@ class MaxBootstrapper(BootstrapperBase):
         return guesser
 
     def _set_default_result(self):
-        self._result = {
-            # overall processing flags
-            'flags':procflags.NO_ATTEMPT,
-
-            # psf fitting related information
-            'psf':{
-                'flags':procflags.NO_ATTEMPT,
-                'byband':[],
-            },
-
-            # psf flux fitting related information
-            'psf_flux':{
-                'flags':procflags.NO_ATTEMPT,
-                'byband':[],
-            },
-
-            # object fitting related information
-            'obj': {
-                'flags':procflags.NO_ATTEMPT,
-            }
-        }
-
+        self._result = get_default_result()
 
 class MetacalMaxBootstrapper(object):
     """
@@ -300,12 +329,13 @@ class MetacalMaxBootstrapper(object):
                  config,
                  prior,
                  rng):
+
         self.mbobs=mbobs
         self.config=config
         self.prior=prior
         self.rng=rng
 
-        self._result={'mcal_flags':0}
+        self._set_default_result()
 
     @property
     def result(self):
@@ -318,11 +348,15 @@ class MetacalMaxBootstrapper(object):
         """
         do all the processing necessary for metacal
         """
+
+        res=self.result
+        res['mcal_flags'] = 0
+
         config=self.config
 
         if config['metacal'].get('symmetrize_psf',False):
             self._do_psf_fits_for_symmetrize(self.mbobs)
-            if self.result['mcal_flags'] != 0:
+            if res['mcal_flags'] != 0:
                 return
 
         mdict=ngmix.metacal.get_all_metacal(
@@ -330,7 +364,6 @@ class MetacalMaxBootstrapper(object):
             **config['metacal'],
         )
 
-        res=self.result
 
         for type, tmbobs in mdict.items():
             self._do_one_metacal(tmbobs, type)
@@ -386,4 +419,9 @@ class MetacalMaxBootstrapper(object):
             self.prior,
             self.rng,
         )
+
+    def _set_default_result(self):
+        self._result = get_default_mcal_result()
+
+
 
