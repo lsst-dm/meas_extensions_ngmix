@@ -85,6 +85,13 @@ config.stamps.bits_to_null = [
     'UNMASKEDNAN',
 ]
 
+# we do not process objects for which these bits are set
+#config.stamps.bits_to_cut = []
+
+# we will be nulling the weight map for some bits, don't allow more
+# than this fraction to be masked in any band
+config.stamps.max_zero_weight_frac = 0.45
+
 
 ###############
 # object config

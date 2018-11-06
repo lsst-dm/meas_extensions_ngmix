@@ -1,6 +1,7 @@
 # really should cut objects that have high mask fraction
 # also maybe inexact_psf entirely, maybe not_deblended
-# but that might get caught by mask fraction?
+# but that depends if we care about deblending.
+# also might get caught by mask fraction?
 
 
 # defaults to True, use the deblended coadds
@@ -91,6 +92,18 @@ config.stamps.bits_to_null = [
     'UNMASKEDNAN',
 ]
 
+# we do not process objects for which these bits are set
+# not_deblended may not even matter for metacal, and may
+# well cause a detection/selection bias we can't control
+config.stamps.bits_to_cut = [
+    'BRIGHT_OBJECT',
+    'INEXACT_PSF',
+    #'NOT_DEBLENDED',
+]
+
+# we will be nulling the weight map for some bits, don't allow more
+# than this fraction to be masked in any band
+config.stamps.max_zero_weight_frac = 0.05
 
 ###############
 # object config
