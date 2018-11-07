@@ -12,9 +12,8 @@ Some TODO items (there are many more below in the code)
         - also for the deblended coadds, there is noise missing because it gets
           sucked into siblings
 
-    - deal properly with the mask plane.  I've got something working
-      but need someone to look it over.
-          - go look at ngmix-bd.py for more notes
+    - deal properly with the mask plane. I've got some better handling
+      but will probably always need re-evaluation
 
     - add weighted moments
 
