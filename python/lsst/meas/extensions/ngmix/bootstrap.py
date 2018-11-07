@@ -45,6 +45,7 @@ DEFAULT_MCAL_RESULT = {
     '2p': {},
     '2m': {},
 }
+
 for type in DEFAULT_MCAL_RESULT:
     if type not in['mcal_flags']:
         DEFAULT_MCAL_RESULT[type] = deepcopy(DEFAULT_RESULT)
@@ -213,6 +214,8 @@ class MaxBootstrapper(BootstrapperBase):
         tres=runner.fitter.get_result()
 
         res['obj'].update(tres)
+        if res['obj']['flags'] != 0:
+            res['flags'] |= procflags.OBJ_FIT_FAILURE
 
     def _set_model_stats(self, tres):
         """
