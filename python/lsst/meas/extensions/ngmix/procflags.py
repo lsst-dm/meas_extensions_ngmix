@@ -1,15 +1,21 @@
-# flags for fitting codes
-PSF_FIT_FAILURE      = 2**0
-PSF_FLUX_FIT_FAILURE = 2**1
-GAL_FIT_FAILURE      = 2**2
+# no attempt was made for some measurment.
+NO_ATTEMPT           = 2**0
 
-# flags used by NGMixer
-#BAD_OBJ              = 2**25
-IMAGE_FLAGS          = 2**26
-#NO_CUTOUTS           = 2**27
-#BOX_SIZE_TOO_BIG     = 2**28
-#UTTER_FAILURE        = 2**29
-NO_ATTEMPT           = 2**30
+# the weight map had too many zeros in it
+HIGH_MASKFRAC        = 2**1
+
+# some bits were set in the image that are not allowed
+IMAGE_FLAGS          = 2**2
+
+# PSF fitting failed
+PSF_FIT_FAILURE      = 2**3
+
+# the PSF flux fitting failed
+PSF_FLUX_FIT_FAILURE = 2**4
+
+# the object fitting failed
+#OBJ_FIT_FAILURE      = 2**5
+
 
 # failure of PSF fitting at some point in metacal
 METACAL_PSF_FAILURE = 2**0
