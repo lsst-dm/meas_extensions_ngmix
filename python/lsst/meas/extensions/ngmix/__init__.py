@@ -29,3 +29,5 @@ from . import util
 from . import procflags
 from . import bootstrap
 from . import priors
+from . import mbobs_extractor
+from . import config

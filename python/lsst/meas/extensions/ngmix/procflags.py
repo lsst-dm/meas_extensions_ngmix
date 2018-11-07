@@ -14,7 +14,7 @@ PSF_FIT_FAILURE      = 2**3
 PSF_FLUX_FIT_FAILURE = 2**4
 
 # the object fitting failed
-#OBJ_FIT_FAILURE      = 2**5
+OBJ_FIT_FAILURE      = 2**5
 
 
 # failure of PSF fitting at some point in metacal
