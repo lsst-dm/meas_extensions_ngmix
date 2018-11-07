@@ -76,3 +76,13 @@ def trim_odd_image(im):
         new_im = im
 
     return new_im
+
+def get_ored_bits(maskobj, bitnames):
+    bits=0
+    for ibit,bitname in enumerate(bitnames):
+        bitval = maskobj.getPlaneBitMask(bitname)
+        bits |= bitval
+
+    return bits
+
+
