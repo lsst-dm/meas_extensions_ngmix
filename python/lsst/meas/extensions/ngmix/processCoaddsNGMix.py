@@ -2,6 +2,7 @@
 Some TODO items (there are many more below in the code)
 
     - tag a new ngmix, make known to Jim
+        - currently using v1.1.0rc1
         - numba needed too, talk to DC2 people (easy)
 
     - get a real estimate of the background noise. I am faking this
