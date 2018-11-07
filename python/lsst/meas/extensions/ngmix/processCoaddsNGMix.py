@@ -9,17 +9,14 @@ Some TODO items (there are many more below in the code)
       object poisson noise.  metacal is not tested with object poisson
       noise included
 
-    - also for the deblended coadds, there is noise missing because it gets
-      sucked into siblings
+        - also for the deblended coadds, there is noise missing because it gets
+          sucked into siblings
 
     - deal properly with the mask plane.  I've got something working
       but need someone to look it over.
           - go look at ngmix-bd.py for more notes
 
     - add weighted moments
-
-    - psf for is supposed to be normalized, but might not be exactly.
-        - this is ok, just ignore
 
     - maybe aperture corrections?
 
@@ -525,66 +522,87 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
         return Struct(output=output)
 
-    def _check_obs(self, mbobs):
+    def _check_obs(self, mbobs, maskfrac_byband):
         """
         check for image bits that we skip, mask fraction, and
         other things
         """
 
-        return (
-            self._check_bitmask(mbobs)
-            and
-            self._check_masked_frac(mbobs)
-        )
+        flags = 0
+        flags |= self._check_bitmask(mbobs)
+        flags |= self._check_masked_frac(maskfrac_byband)
+
+        return flags
 
     def _check_bitmask(self, mbobs):
         """
         check to see if bits are set that we do not allow
         in the postage stamp
         """
+        flags = 0
+
         bitnames_to_cut = self.cdict['stamps']['bits_to_cut']
-        for obslist in mbobs:
-            for obs in obslist:
+        for iband,obslist in enumerate(mbobs):
+            obs=obslist[0]
 
-                if len(bitnames_to_cut) > 0:
-                    maskobj = obs.meta['maskobj']
-                    bits_to_cut=_get_ored_bits(maskobj, bitnames_to_cut)
-                    w=np.where( (obs.bmask & bits_to_cut) != 0 )
-                    if w[0].size > 0:
-                        self.log.info(
-                            'setting IMAGE_FLAGS '
-                            'because one of these '
-                            'are set %s' % str(bitnames_to_cut)
-                        )
-                        return False
+            if len(bitnames_to_cut) > 0:
+                maskobj = obs.meta['maskobj']
+                bits_to_cut=_get_ored_bits(maskobj, bitnames_to_cut)
+                w=np.where( (obs.bmask & bits_to_cut) != 0 )
+                if w[0].size > 0:
 
-        return True
+                    band=self.cdict['filters'][iband]
 
-    def _check_masked_frac(self, mbobs):
+                    self.log.info(
+                        'setting IMAGE_FLAGS '
+                        'because in band %s one of these '
+                        'are set %s' % (band,str(bitnames_to_cut))
+                    )
+                    flags |= procflags.IMAGE_FLAGS
+
+        return flags
+
+    def _check_masked_frac(self, maskfrac_byband):
         """
         check to see if the masked fraction is too high
         in any of the stamps
         """
+
+        flags = 0
+
         mzfrac = self.cdict['stamps']['max_zero_weight_frac']
         if mzfrac >= 1.0:
-            return True
+            return flags
 
-        for obslist in mbobs:
+        for iband,frac in enumerate(maskfrac_byband):
+            if frac > mzfrac:
+                band=self.cdict['filters'][iband]
+                self.log.info(
+                    'setting HIGH_MASKFRAC in filter %s '
+                    'because zero weight frac '
+                    'exceeds max: %g > %g' % (band,frac,mzfrac)
+                )
+                flags |= procflags.HIGH_MASKFRAC
+
+        return flags
+
+    def _get_masked_fraction(self, mbobs):
+        """
+        check to see if the masked fraction is too high
+        in any of the stamps
+        """
+
+        nband=len(mbobs)
+        maskfrac_byband = np.zeros(nband)
+
+        for band,obslist in enumerate(mbobs):
             for obs in obslist:
 
                 w=np.where(obs.weight <= 0.0)
-                frac = w[0].size/float(obs.weight.size)
-                if frac > mzfrac:
-                    self.log.info(
-                        'setting IMAGE_FLAGS '
-                        'because zero weight frac '
-                        'exceeds max: %g > %g' % (frac,mzfrac)
-                    )
-                    return False
+                maskfrac_byband[band] = w[0].size/float(obs.weight.size)
 
-
-        return True
-
+        maskfrac = maskfrac_byband.mean()
+        return maskfrac, maskfrac_byband
 
 
     def _get_default_result(self):
@@ -746,7 +764,12 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         mtypes=[
             (n('flags'),'overall flags for the processing',np.int32,''),
             (n('stamp_size'),'size of postage stamp',np.int32,''),
+            (n('maskfrac'),'mean masked fraction',np.float32,''),
         ]
+        for filt in config['filters']:
+            mtypes += [
+                (n('maskfrac_%s' % filt),'masked fraction in %s filter' % filt,np.float32,''),
+            ]
 
         # psf fitting related fields
         mtypes += [
@@ -844,10 +867,13 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         if self.cdict['make_plots']:
             self._make_plots(id, mbobs)
 
+        maskfrac, maskfrac_byband = self._get_masked_fraction(mbobs)
 
-        if not self._check_obs(mbobs):
+        flags = self._check_obs(mbobs, maskfrac_byband)
+        if flags != 0:
             res=self._get_default_result()
-            res['flags'] = procflags.IMAGE_FLAGS
+            res['maskfrac'], res['maskfrac_byband'] = maskfrac, maskfrac_byband
+            res['flags'] = flags
             return res
 
         boot=self._get_bootstrapper(mbobs)
@@ -860,7 +886,9 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         else:
             boot.fit_model()
 
-        return boot.result
+        res=boot.result
+        res['maskfrac'], res['maskfrac_byband'] = maskfrac, maskfrac_byband
+        return res
 
     def _get_bootstrapper(self, mbobs):
         """
@@ -889,6 +917,9 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         output[n('flags')] = res['flags']
         output[n('stamp_size')] = stamp_size
+        output[n('maskfrac')] = res['maskfrac']
+        for ifilt,filt in enumerate(self.cdict['filters']):
+            output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
 
         self._copy_psf_fit_result(res['psf'], output)
         self._copy_psf_fit_results_byband(res['psf'], output)
@@ -914,6 +945,9 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         copy the PSF result from each band to the output record.
         """
 
+        if len(pres['byband'])==0:
+            return
+
         config=self.cdict
         for ifilt,filt in enumerate(config['filters']):
             filt_res = pres['byband'][ifilt]
@@ -932,6 +966,9 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         copy the PSF flux fitting results from each band to the output record.
         """
+
+        if len(pres['byband'])==0:
+            return
 
         config=self.cdict
         for ifilt,filt in enumerate(config['filters']):
@@ -1083,7 +1120,13 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         mtypes=[
             (n('flags'),'overall flags for the processing',np.int32,''),
             (n('stamp_size'),'size of postage stamp',np.int32,''),
+            (n('maskfrac'),'mean masked fraction',np.float32,''),
         ]
+        for filt in config['filters']:
+            mtypes += [
+                (n('maskfrac_%s' % filt),'masked fraction in %s filter' % filt,np.float32,''),
+            ]
+
 
         # psf fitting related fields
         mtypes += [
@@ -1183,14 +1226,22 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         if self.cdict['make_plots']:
             self._make_plots(id, mbobs)
 
-        if not self._check_obs(mbobs):
+        # start with a default result.  may not use if we get to
+        # measurements
+        maskfrac, maskfrac_byband = self._get_masked_fraction(mbobs)
+
+        flags = self._check_obs(mbobs, maskfrac_byband)
+        if flags != 0:
             res=self._get_default_result()
-            res['mcal_flags'] = procflags.IMAGE_FLAGS
+            res['maskfrac'], res['maskfrac_byband'] = maskfrac, maskfrac_byband
+            res['flags'] = flags
             return res
 
         boot=self._get_bootstrapper(mbobs)
         boot.go()
-        return boot.result
+        res=boot.result
+        res['maskfrac'], res['maskfrac_byband'] = maskfrac, maskfrac_byband
+        return res
 
     def _get_bootstrapper(self, mbobs):
         """
@@ -1220,6 +1271,9 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 
         output[n('flags')] = res['mcal_flags']
         output[n('stamp_size')] = stamp_size
+        output[n('maskfrac')] = res['maskfrac']
+        for ifilt,filt in enumerate(self.cdict['filters']):
+            output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
 
         self._copy_psf_fit_result(res['noshear']['psf'], output)
         self._copy_psf_fit_results_byband(res['noshear']['psf'], output)
