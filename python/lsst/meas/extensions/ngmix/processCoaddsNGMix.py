@@ -1242,12 +1242,4 @@ def make_image_plots(id, images, ncols = 1, titles = None, show=False):
         plt.show()
     return plt
 
-def _print_bits(maskobj, bitnames):
-    mask=maskobj.array
-    bits=0
-    for ibit,bitname in enumerate(bitnames):
-        bitval = maskobj.getPlaneBitMask(bitname)
-        w=np.where( (mask & bitval) != 0 )
-        if w[0].size > 0:
-            print('%s %d %d/%d' % (bitname,bitval,w[0].size,mask.size))
 
