@@ -21,4 +21,13 @@
 #
 
 from .EMPsfApprox import *
-from .LMSimpleShape import *
+from .converters import *
+
+from .processCoaddsTogether import *
+from .processCoaddsNGMix import *
+from . import util
+from . import procflags
+from . import bootstrap
+from . import priors
+from . import mbobs_extractor
+from . import config

@@ -20,28 +20,22 @@
 # the GNU General Public License along with this program.  If not,
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
-"""
-Definitions and registration of pure-Python plugins with trivial implementations,
-and automatic plugin-from-algorithm calls for those implemented in C++.
-"""
-from builtins import range
-import numpy
+
+import numpy as np
 import ngmix
 from ngmix.bootstrap import EMRunner
 from ngmix.em import EM_RANGE_ERROR, EM_MAXITER
+
 import lsst.pex.exceptions
 import lsst.afw.detection
 import lsst.afw.geom
-import lsst.afw.geom as afwGeom
-import lsst.afw.math as afwMath
-import lsst.afw.image as afwImage
 import lsst.shapelet
 
 from lsst.meas.base.pluginRegistry import register
-from lsst.meas.base.sfm import SingleFramePluginConfig, SingleFramePlugin
-from lsst.meas.base.baseLib import MeasurementError
-from lsst.meas.base import FlagDefinition, FlagDefinitionVector, FlagHandler
-import lsst.meas.base.flagDecorator
+from lsst.meas.base import SingleFramePluginConfig, SingleFramePlugin, FatalAlgorithmError
+
+from .converters import convertGMixToMultiShapelet
+
 
 __all__ = ("SingleFrameEmPsfApproxConfig", "SingleFrameEmPsfApproxPlugin")
 
@@ -56,19 +50,13 @@ class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
                                    doc="Number of gaussians")
     nTries = lsst.pex.config.Field(dtype=int, default=10, optional=False,
                                    doc="maximum number of tries with different guesses")
-    maxIters = lsst.pex.config.Field(dtype=int, default=10000, optional=False,
-                                     doc="maximum number of iterations")
+    maxIter = lsst.pex.config.Field(dtype=int, default=10000, optional=False,
+                                    doc="maximum number of iterations")
     tolerance = lsst.pex.config.Field(dtype=float, default=1e-6, optional=False,
                                       doc="tolerance")
 
 
-@register("meas_extensions_ngmix_EMPsfApprox")
-@lsst.meas.base.flagDecorator.addFlagHandler(("flag", "General Failure error"),
-                                             ("flag_rangeError", "Iteration error in Gaussian parameters."),
-                                             ("flag_maxIters",
-                                              "Fitter exceeded maxIters setting without converging."),
-                                             ("flag_noPsf", "No PSF attached to the exposure.")
-                                             )
+@register("ngmix_EMPsfApprox")
 class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
     """
     Plugin to do Psf modeling using the ngmix Expectation-Maximization Algorithm.
@@ -86,33 +74,58 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
     def __init__(self, config, name, schema, metadata):
         SingleFramePlugin.__init__(self, config, name, schema, metadata)
 
-        self.iterKey = schema.addField(name + '_iterations', type=int, doc="number of iterations run")
-        self.fdiffKey = schema.addField(name + '_fdiff', type=float, doc="fit difference")
+        self.iterKey = schema.addField(
+            schema.join(name, "iterations"),
+            type=np.int32,
+            doc="number of iterations run"
+        )
+        self.fdiffKey = schema.addField(
+            schema.join(name, "fdiff"),
+            type=float,
+            doc="fit difference"
+        )
+        self.flagKey = schema.addField(
+            schema.join(name, "flag"),
+            type="Flag",
+            doc="General failure flag."
+        )
+        self.flagRangeErrorKey = schema.addField(
+            schema.join(name, "flag_rangeError"),
+            type="Flag",
+            doc="Invalid ellipse parameters detected during iteration."
+        )
+        self.flagMaxIterKey = schema.addField(
+            schema.join(name, "flag_maxIter"),
+            type="Flag",
+            doc="Maximum number of iterations (%d) exceeded." % self.config.maxIter
+        )
 
-        # Add ShapeletFunction keys for the number of Gaussians requested
-        self.keys = []
-        for i in range(config.nGauss):
-            key = lsst.shapelet.ShapeletFunctionKey.addFields(schema,
-                                                             "%s_%d"%(name, i),
-                                                             "ngmix EM gaussian", "pixels", "",
-                                                              0, lsst.shapelet.HERMITE)
-            self.keys.append(key)
-        self.msfKey = lsst.shapelet.MultiShapeletFunctionKey(self.keys)
+        # Add MultiShapeletFunction key for the actual multi-Gaussian (a
+        # multi-Gaussian is a MultiShapelet with all components zeroth-order).
+        self.msfKey = lsst.shapelet.MultiShapeletFunctionKey.addFields(
+            schema,
+            name,
+            "ngmix E-M multi-Gaussian PSF approximation",
+            ellipseUnit="pixel",
+            coeffUnit="",
+            orders=[0]*config.nGauss,
+        )
 
     def measure(self, measRecord, exposure):
-        if exposure.getPsf() is None:
-            raise MeasurementError(
-                self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_noPsf).doc,
-                SingleFrameEmPsfApproxPlugin.ErrEnum.flag_noPsf)
-        psfArray = exposure.getPsf().computeKernelImage().getArray()
-        psfObs = ngmix.observation.Observation(psfArray,
-            jacobian=ngmix.UnitJacobian(row=(psfArray.shape[0]-1)/2, col=(psfArray.shape[1]-1)/2))
+        psf = exposure.getPsf()
+        if psf is None:
+            raise FatalAlgorithmError("EMPsfApprox requires a PSF.")
+        psfArray = psf.computeKernelImage().getArray()
+        psfObs = ngmix.observation.Observation(
+            psfArray,
+            jacobian=ngmix.UnitJacobian(row=(psfArray.shape[0]-1)/2, col=(psfArray.shape[1]-1)/2)
+        )
 
         #  Need a guess at the sum of the diagonal moments
         nGauss = self.config.nGauss
-        shape = exposure.getPsf().computeShape()
+        shape = psf.computeShape()
         Tguess = shape.getIxx() + shape.getIyy()
-        emPars = {'maxiter': self.config.maxIters, 'tol': self.config.tolerance}
+        emPars = {'maxiter': self.config.maxIter, 'tol': self.config.tolerance}
 
         runner = EMRunner(psfObs, Tguess, nGauss, emPars)
         runner.go(ntry=self.config.nTries)
@@ -123,34 +136,21 @@ class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
         measRecord.set(self.iterKey, res['numiter'])
         measRecord.set(self.fdiffKey, res['fdiff'])
 
-        #   We only know about two EM errors.  Anything else is thrown as "unknown".
+        #   We only know about two EM errors.
         if res['flags'] != 0:
             if res['flags'] & EM_RANGE_ERROR:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_rangeError).doc,
-                    SingleFrameEmPsfApproxPlugin.ErrEnum.flag_rangeError)
+                measRecord.set(self.flagRangeErrorKey, True)
             if res['flags'] & EM_MAXITER:
-                raise MeasurementError(
-                    self.flagHandler.getDefinition(SingleFrameEmPsfApproxPlugin.ErrEnum.flag_maxIters).doc,
-                    SingleFrameEmPsfApproxPlugin.ErrEnum.flag_maxIters)
-            raise RuntimeError("Unknown EM fitter exception")
+                measRecord.set(self.flagMaxIterKey, True)
+            if not (res['flags'] & (EM_RANGE_ERROR | EM_MAXITER)):
+                raise RuntimeError("Unexpected error flag %x in ngmix results." % res['flags'])
+            measRecord.set(self.flagKey, True)
+            return
 
-        #   Convert the nGauss Gaussians to ShapeletFunction's.  Zeroth order HERMITES are Gaussians.
-        #   There are always 6 parameters for each Gaussian.
-        psf_pars = fitter.get_gmix().get_full_pars()
-        #  Gaussian pars are 6 numbers long.  Pick the results off one at a time
-        for i in range(self.config.nGauss):
-            flux, y, x, iyy, ixy, ixx = psf_pars[i*self.gaussian_pars_len: (i+1)*self.gaussian_pars_len]
-            quad = lsst.afw.geom.ellipses.Quadrupole(ixx, iyy, ixy)
-            ellipse = lsst.afw.geom.ellipses.Ellipse(quad, lsst.afw.geom.Point2D(x, y))
-            # create a 0th order (gaussian) shapelet function.
-            sf = lsst.shapelet.ShapeletFunction(0, lsst.shapelet.HERMITE, ellipse)
-            sf.getCoefficients()[0] = flux/lsst.shapelet.ShapeletFunction.FLUX_FACTOR
-            measRecord.set(self.keys[i], sf)
+        measRecord.set(self.msfKey, convertGMixToMultiShapelet(fitter.get_gmix()))
 
-    #   This routine responds to the standard failure call in baseMeasurement
     def fail(self, measRecord, error=None):
-        if error is None:
-            self.flagHandler.handleFailure(measRecord)
-        else:
-            self.flagHandler.handleFailure(measRecord, error.cpp)
+        # Should only get here if we get an unexpected exception; in that case
+        # we set the general flag and rely on the measurement framework to
+        # also warn.
+        measRecord.set(self.flagKey, True)

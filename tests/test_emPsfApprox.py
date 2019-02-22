@@ -1,4 +1,3 @@
-from builtins import range
 # LSST Data Management System
 # Copyright 2008-2015 AURA/LSST
 #
@@ -23,13 +22,8 @@ from builtins import range
 import os
 import numpy as np
 import unittest
-import itertools
 
-import lsst.pex.exceptions as pexExceptions
 import lsst.afw.image as afwImage
-import lsst.afw.math as afwMath
-import lsst.afw.detection as afwDetection
-import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 import lsst.meas.algorithms as measAlg
 import lsst.meas.base as measBase
@@ -37,15 +31,15 @@ from lsst.meas.base.tests import AlgorithmTestCase
 
 import lsst.meas.extensions.ngmix.EMPsfApprox
 
+
 def makeGaussianArray(size, sigma, xc=None, yc=None):
+    """Create an array of size x size containing a 2D circular Gaussian of
+    size sigma.  Normalized to 1.0
     """
-    Create an array of size x size containing a 2D circular Gaussian of size sigma.  Normalized to 1.0
-    """
-    if xc == None:
+    if xc is None:
         xc = (size-1)/2.0
-    if yc == None:
+    if yc is None:
         yc = (size-1)/2.0
-    image = afwImage.ImageD(afwGeom.Box2I(afwGeom.Point2I(0, 0), afwGeom.Point2I(size, size)))
     array = np.ndarray(shape=(size, size), dtype=np.float64)
     for yi, yv in enumerate(range(0, size)):
         for xi, xv in enumerate(range(0, size)):
@@ -53,29 +47,31 @@ def makeGaussianArray(size, sigma, xc=None, yc=None):
     array /= array.sum()
     return array
 
+
 def runMeasure(task, schema, exposure):
-    """
-    Run a measurement task which has previously been initialized on a single source
+    """Run a measurement task which has previously been initialized on a single source
     """
     cat = afwTable.SourceCatalog(schema)
     source = cat.addNew()
-    dettask = measAlg.SourceDetectionTask()
+    detConfig = measAlg.SourceDetectionConfig()
+    detConfig.background.approxOrderX = 0
+    detTask = measAlg.SourceDetectionTask(config=detConfig)
 
     # Suppress non-essential task output.
-    dettask.log.setLevel(dettask.log.WARN)
+    detTask.log.setLevel(detTask.log.WARN)
 
     # We are expecting this task to log an error. Suppress it, so that it
     # doesn't appear on the console or in logs, and incorrectly cause the user
     # to assume a failure.
     task.log.setLevel(task.log.FATAL)
-    footprints = dettask.detectFootprints(exposure, sigma=4.0).positive.getFootprints()
+    footprints = detTask.detectFootprints(exposure, sigma=4.0).positive.getFootprints()
     source.setFootprint(footprints[0])
     task.run(cat, exposure)
     return source
 
+
 def makePsf(size, sigma1, mult1, sigma2, mult2):
-    """
-    make a Gaussian with one or two components.  Always square of dimensions size x size
+    """make a Gaussian with one or two components.  Always square of dimensions size x size
     """
     array0 = makeGaussianArray(size, sigma1)
     array0 *= mult1
@@ -90,7 +86,7 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
 
     def setUp(self):
         self.dataDir = os.path.join(lsst.utils.getPackageDir("meas_extensions_ngmix"), "tests", "data")
-        self.algName = "meas_extensions_ngmix_EMPsfApprox"
+        self.algName = "ngmix_EMPsfApprox"
 
     def makeConfig(self):
         config = measBase.SingleFrameMeasurementConfig()
@@ -98,7 +94,7 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         config.slots.centroid = None
         config.slots.apFlux = None
         config.slots.calibFlux = None
-        config.slots.instFlux = None
+        config.slots.gaussianFlux = None
         config.slots.modelFlux = None
         config.slots.psfFlux = None
         config.slots.shape = None
@@ -117,8 +113,7 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         source = runMeasure(task, schema, exposure)
         self.assertEqual(source.get(self.algName + "_flag"), True)
         self.assertEqual(source.get(self.algName + "_flag_rangeError"), False)
-        self.assertEqual(source.get(self.algName + "_flag_maxIters"), False)
-        self.assertEqual(source.get(self.algName + "_flag_noPsf"), False)
+        self.assertEqual(source.get(self.algName + "_flag_maxIter"), False)
 
     #   Test to be sure that we can catch the maximum iterations error
     def testMaxIter(self):
@@ -126,7 +121,7 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         msConfig.plugins[self.algName].nGauss = 2
         msConfig.plugins[self.algName].tolerance = 1e-10
         #   we know the code can't fit this in one iteration
-        msConfig.plugins[self.algName].maxIters = 1
+        msConfig.plugins[self.algName].maxIter = 1
         schema = afwTable.SourceTable.makeMinimalSchema()
         task = measBase.SingleFrameMeasurementTask(schema=schema, config=msConfig)
         exposure = afwImage.ExposureF(os.path.join(self.dataDir, "exp.fits"))
@@ -135,8 +130,7 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         source = runMeasure(task, schema, exposure)
         self.assertEqual(source.get(self.algName + "_flag"), True)
         self.assertEqual(source.get(self.algName + "_flag_rangeError"), False)
-        self.assertEqual(source.get(self.algName + "_flag_maxIters"), True)
-        self.assertEqual(source.get(self.algName + "_flag_noPsf"), False)
+        self.assertEqual(source.get(self.algName + "_flag_maxIter"), True)
 
     #   Test to be sure that we can catch the missing psf error
     def testMissingPsf(self):
@@ -146,11 +140,11 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         exposure = afwImage.ExposureF(os.path.join(self.dataDir, "exp.fits"))
         #   Strip the psf
         exposure.setPsf(None)
-        source = runMeasure(task, schema, exposure)
-        self.assertEqual(source.get(self.algName + "_flag"), True)
-        self.assertEqual(source.get(self.algName + "_flag_rangeError"), False)
-        self.assertEqual(source.get(self.algName + "_flag_maxIters"), False)
-        self.assertEqual(source.get(self.algName + "_flag_noPsf"), True)
+        with self.assertRaises(measBase.FatalAlgorithmError):
+            source = runMeasure(task, schema, exposure)
+            self.assertEqual(source.get(self.algName + "_flag"), True)
+            self.assertEqual(source.get(self.algName + "_flag_rangeError"), False)
+            self.assertEqual(source.get(self.algName + "_flag_maxIter"), False)
 
     #   Test that the EmPsfApprox plugin produces a more or less reasonable result
     def testEMPlugin(self):
@@ -169,8 +163,7 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         #   Be sure there were no failures
         self.assertEqual(source.get(self.algName + "_flag"), False)
         self.assertEqual(source.get(self.algName + "_flag_rangeError"), False)
-        self.assertEqual(source.get(self.algName + "_flag_maxIters"), False)
-        self.assertEqual(source.get(self.algName + "_flag_noPsf"), False)
+        self.assertEqual(source.get(self.algName + "_flag_maxIter"), False)
 
         self.msfKey = lsst.shapelet.MultiShapeletFunctionKey(schema[self.algName],
                                                              lsst.shapelet.HERMITE)
