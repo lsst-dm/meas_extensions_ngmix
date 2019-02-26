@@ -43,24 +43,24 @@ class ProcessCoaddsTogetherConfig(Config):
         name="deepCoadd_calexp",
         scalar=False,
         storageClass="Exposure",
-        units=("Tract", "Patch", "AbstractFilter", "SkyMap")
+        dimensions=("Tract", "Patch", "AbstractFilter", "SkyMap")
     )
     ref = InputDatasetField(
         doc="Coadd catalog DatasetType reference input (one instance across all bands).",
         name="deepCoadd_ref",
         scalar=True,
         storageClass="SourceCatalog",
-        units=("Tract", "Patch", "SkyMap")
+        dimensions=("Tract", "Patch", "SkyMap")
     )
     output = OutputDatasetField(
         doc="Output catalog DatasetType (one instance across all bands)",
         name=None,   # Must be overridden by derived classes to a DatasetType known to obs_base
         scalar=True,
         storageClass="SourceCatalog",
-        units=("Tract", "Patch", "SkyMap")
+        dimensions=("Tract", "Patch", "SkyMap")
     )
     quantum = QuantumConfig(
-        units=("Tract", "Patch", "SkyMap")
+        dimensions=("Tract", "Patch", "SkyMap")
     )
     deblendReplacer = ConfigField(
         dtype=NoiseReplacerConfig,
@@ -73,7 +73,7 @@ class ProcessCoaddsTogetherConfig(Config):
         name="deepCoadd_meas",
         scalar=False,
         storageClass="SourceCatalog",
-        units=("Tract", "Patch", "AbstractFilter", "SkyMap")
+        dimensions=("Tract", "Patch", "AbstractFilter", "SkyMap")
     )
     useDeblends = Field(
         dtype=bool,
