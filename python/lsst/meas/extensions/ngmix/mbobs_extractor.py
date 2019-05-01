@@ -4,8 +4,21 @@ import lsst.log
 from lsst.geom import Extent2D
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
+from lsst.pex.exceptions import InvalidParameterError
 
 from . import util
+
+class MBObsMissingDataError(Exception):
+    """
+    Some number was out of range
+    """
+    def __init__(self, value):
+         super(MBObsMissingDataError, self).__init__(value)
+         self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
 
 class MBObsExtractor(object):
     """
@@ -181,8 +194,12 @@ class MBObsExtractor(object):
         trim it to be square and preserve the center to
         be at the new canonical center
         """
-        psfobj = stamp.getPsf()
-        psfim  = psfobj.computeKernelImage(orig_pos).array
+        try:
+            psfobj = stamp.getPsf()
+            psfim  = psfobj.computeKernelImage(orig_pos).array
+        except InvalidParameterError:
+            raise MBObsMissingDataError("could not reconstruct PSF")
+
         psfim  = np.array(psfim, dtype='f4', copy=False)
 
         psfim = util.trim_odd_image(psfim)

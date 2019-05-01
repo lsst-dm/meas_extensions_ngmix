@@ -68,7 +68,7 @@ from lsst.pipe.base import Struct
 from .processCoaddsTogether import ProcessCoaddsTogetherTask
 from . import util
 from .util import Namer
-from .mbobs_extractor import MBObsExtractor
+from .mbobs_extractor import MBObsExtractor, MBObsMissingDataError
 from . import bootstrap
 from . import priors
 from . import procflags
@@ -174,9 +174,14 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
                 for r in replacers.values():
                     r.insertSource(refRecord.getId())
 
-            mbobs = extractor.get_mbobs(refRecord)
+            try:
+                mbobs = extractor.get_mbobs(refRecord)
+                res = self._process_observations(ref['id'][n], mbobs)
+            except MBObsMissingDataError:
+                res=self._get_default_result()
+                # NO_ATTEMPT because there was missing data
+                res['flags'] = procflags.NO_ATTEMPT
 
-            res = self._process_observations(ref['id'][n], mbobs)
 
             self._copy_result(mbobs, res, outRecord)
 
