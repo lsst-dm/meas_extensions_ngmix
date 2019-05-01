@@ -177,11 +177,10 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
             try:
                 mbobs = extractor.get_mbobs(refRecord)
                 res = self._process_observations(ref['id'][n], mbobs)
-            except MBObsMissingDataError:
+            except MBObsMissingDataError as err:
+                self.log.info(str(err))
+                mbobs = None
                 res=self._get_default_result()
-                # NO_ATTEMPT because there was missing data
-                res['flags'] = procflags.NO_ATTEMPT
-
 
             self._copy_result(mbobs, res, outRecord)
 
@@ -590,21 +589,27 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         copy the result dict to the output record
         """
+
         n=self.get_namer()
-        stamp_shape = mbobs[0][0].image.shape
-        stamp_size=stamp_shape[0]
 
-        output[n('flags')] = res['flags']
-        output[n('stamp_size')] = stamp_size
-        output[n('maskfrac')] = res['maskfrac']
-        for ifilt,filt in enumerate(self.cdict['filters']):
-            output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
+        if mbobs is None:
+            output[n('flags')] = procflags.NO_ATTEMPT
+        else:
+            output[n('flags')] = res['flags']
 
-        self._copy_psf_fit_result(res['psf'], output)
-        self._copy_psf_fit_results_byband(res['psf'], output)
-        self._copy_psf_flux_results_byband(res['psf_flux'], output)
+            stamp_shape = mbobs[0][0].image.shape
+            stamp_size=stamp_shape[0]
 
-        self._copy_model_result(res['obj'], output)
+            output[n('stamp_size')] = stamp_size
+            output[n('maskfrac')] = res['maskfrac']
+            for ifilt,filt in enumerate(self.cdict['filters']):
+                output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
+
+            self._copy_psf_fit_result(res['psf'], output)
+            self._copy_psf_fit_results_byband(res['psf'], output)
+            self._copy_psf_flux_results_byband(res['psf_flux'], output)
+
+            self._copy_model_result(res['obj'], output)
 
     def _copy_psf_fit_result(self, pres, output):
         """
@@ -913,7 +918,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         if flags != 0:
             res=self._get_default_result()
             res['maskfrac'], res['maskfrac_byband'] = maskfrac, maskfrac_byband
-            res['flags'] = flags
+            res['mcal_flags'] = flags
             return res
 
         boot=self._get_bootstrapper(mbobs)
@@ -945,21 +950,26 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         """
 
         n=self.get_namer()
-        stamp_shape = mbobs[0][0].image.shape
-        stamp_size=stamp_shape[0]
 
-        output[n('flags')] = res['mcal_flags']
-        output[n('stamp_size')] = stamp_size
-        output[n('maskfrac')] = res['maskfrac']
-        for ifilt,filt in enumerate(self.cdict['filters']):
-            output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
+        if mbobs is None:
+            output[n('flags')] = procflags.NO_ATTEMPT
+        else:
+            output[n('flags')] = res['mcal_flags']
 
-        self._copy_psf_fit_result(res['noshear']['psf'], output)
-        self._copy_psf_fit_results_byband(res['noshear']['psf'], output)
+            stamp_shape = mbobs[0][0].image.shape
+            stamp_size=stamp_shape[0]
 
-        #self._copy_psf_flux_results_byband(res['psf_flux'], output)
+            output[n('stamp_size')] = stamp_size
+            output[n('maskfrac')] = res['maskfrac']
+            for ifilt,filt in enumerate(self.cdict['filters']):
+                output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
 
-        self._copy_model_result(res, output)
+            self._copy_psf_fit_result(res['noshear']['psf'], output)
+            self._copy_psf_fit_results_byband(res['noshear']['psf'], output)
+
+            #self._copy_psf_flux_results_byband(res['psf_flux'], output)
+
+            self._copy_model_result(res, output)
 
     def _copy_psf_fit_result(self, pres, output):
         """
