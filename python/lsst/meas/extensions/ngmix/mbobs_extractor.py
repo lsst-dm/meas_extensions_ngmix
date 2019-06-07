@@ -312,6 +312,9 @@ class MBObsExtractor(object):
         """
         xy0=None
         for filt in self.config['filters']:
+            if filt not in self.images:
+                raise MBObsMissingDataError('band missing: %s' % filt)
+
             imf = self.images[filt]
             if xy0 is None:
                 xy0 = imf.getXY0()
