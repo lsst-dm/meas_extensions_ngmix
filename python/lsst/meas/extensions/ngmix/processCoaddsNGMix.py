@@ -150,7 +150,11 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         config=self.cdict
         self.log.info(pprint.pformat(config))
 
-        extractor = self._get_extractor(images)
+        try:
+            extractor = self._get_extractor(images)
+        except MBObsMissingDataError as err:
+            self.log.info(str(err))
+            extractor = None
 
         # Make an empty catalog
         output = SourceCatalog(self.schema)
@@ -174,13 +178,19 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
                 for r in replacers.values():
                     r.insertSource(refRecord.getId())
 
-            try:
-                mbobs = extractor.get_mbobs(refRecord)
-                res = self._process_observations(ref['id'][n], mbobs)
-            except MBObsMissingDataError as err:
-                self.log.info(str(err))
-                mbobs = None
+            if extractor is None:
+                # we were missing a band most likely
                 res=self._get_default_result()
+                mbobs = None
+            else:
+
+                try:
+                    mbobs = extractor.get_mbobs(refRecord)
+                    res = self._process_observations(ref['id'][n], mbobs)
+                except MBObsMissingDataError as err:
+                    self.log.info(str(err))
+                    mbobs = None
+                    res=self._get_default_result()
 
             self._copy_result(mbobs, res, outRecord)
 
