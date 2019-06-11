@@ -312,16 +312,15 @@ class MBObsExtractor(object):
         """
         xy0=None
         for filt in self.config['filters']:
+            if filt not in self.images:
+                raise MBObsMissingDataError('band missing: %s' % filt)
+
             imf = self.images[filt]
             if xy0 is None:
                 xy0 = imf.getXY0()
             else:
                 assert xy0 == imf.getXY0(),\
                         "all images must have same reference position"
-
-        if set(self.images.keys()) != set(self.config['filters']):
-            raise RuntimeError("One or more filters missing.")
-
 
 
 def _project_box(source, wcs, radius):
