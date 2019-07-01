@@ -17,7 +17,11 @@ def get_joint_prior(objconf, nband, rng):
         flux_prior = [flux_prior]*nband
 
     if objconf['model']=='bd':
-        fracdev_prior = _get_generic_prior(conf['fracdev'], rng)
+        fracdev_prior = _get_generic_prior(
+            conf['fracdev'],
+            rng,
+            bounds=[0.0, 1.0],
+        )
         jprior = ngmix.joint_prior.PriorBDFSep(
             cen_prior,
             g_prior,
@@ -55,11 +59,11 @@ def _get_g_prior(conf, rng):
     return g_prior
 
 
-def _get_generic_prior(conf, rng):
+def _get_generic_prior(conf, rng, bounds=None):
 
     if conf['type']=='gauss':
         assert len(conf['pars'])==2,"gauss requires 2 parameters"
-        prior = ngmix.priors.Normal(*conf['pars'], rng=rng)
+        prior = ngmix.priors.Normal(*conf['pars'], bounds=bounds, rng=rng)
 
     elif conf['type']=='two-sided-erf':
         assert len(conf['pars'])==4,"two-sided-erf requires 4 parameters"
