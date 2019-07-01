@@ -289,7 +289,7 @@ class MBObsExtractor(object):
             medvar = np.median(var_image[wuse])
             weight[:,:] = 1.0/medvar
         else:
-            self.log.info('    weight is all zero, found none that passed cuts')
+            self.log.warn('    weight is all zero, found none that passed cuts')
             #_print_bits(maskobj, bitnames_to_ignore)
 
         bitnames_to_null = self.config['stamps']['bits_to_null']
@@ -348,7 +348,7 @@ def _get_padded_sub_image(original, bbox):
     if isinstance(original, afwImage.Exposure):
         result.setPsf(original.getPsf())
         result.setWcs(original.getWcs())
-        result.setCalib(original.getCalib())
+        result.setPhotoCalib(original.getPhotoCalib())
         #result.image.array[:, :] = float("nan")
         result.image.array[:, :] = 0.0
         result.variance.array[:, :] = float("inf")
