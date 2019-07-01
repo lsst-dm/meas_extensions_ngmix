@@ -62,6 +62,7 @@ Some TODO items (there are many more below in the code)
 
 import time
 import numpy as np
+import ngmix
 from lsst.afw.table import SourceCatalog, SchemaMapper
 from lsst.pipe.base import Struct
 
@@ -192,6 +193,12 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
                     self.log.warn(str(err))
                     mbobs = None
                     res=self._get_default_result()
+                except ngmix.GMixFatalError as err:
+                    # this occurs when we have an all zero weight map
+                    self.log.warn(str(err))
+                    mbobs = None
+                    res = self._get_default_result()
+                    res['flags'] = procflags.HIGH_MASKFRAC
 
             self._copy_result(mbobs, res, outRecord)
 
