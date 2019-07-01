@@ -168,7 +168,8 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
             if n < index_range[0] or n > index_range[1]:
                 continue
 
-            self.log.info('index: %06d/%06d' % (n,index_range[1]))
+            if (n % 100) == 0:
+                self.log.info('index: %06d/%06d' % (n,index_range[1]))
             nproc += 1
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
@@ -188,7 +189,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
                     mbobs = extractor.get_mbobs(refRecord)
                     res = self._process_observations(ref['id'][n], mbobs)
                 except MBObsMissingDataError as err:
-                    self.log.info(str(err))
+                    self.log.warn(str(err))
                     mbobs = None
                     res=self._get_default_result()
 
@@ -241,7 +242,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
                     band=self.cdict['filters'][iband]
 
-                    self.log.info(
+                    self.log.warn(
                         'setting IMAGE_FLAGS '
                         'because in band %s one of these '
                         'are set %s' % (band,str(bitnames_to_cut))
@@ -265,7 +266,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         for iband,frac in enumerate(maskfrac_byband):
             if frac > mzfrac:
                 band=self.cdict['filters'][iband]
-                self.log.info(
+                self.log.warn(
                     'setting HIGH_MASKFRAC in filter %s '
                     'because zero weight frac '
                     'exceeds max: %g > %g' % (band,frac,mzfrac)
@@ -568,9 +569,9 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         boot.fit_psfs()
         boot.fit_psf_fluxes()
         if boot.result['psf']['flags'] !=0:
-            self.log.info('    skipping model fit due psf fit failure')
+            self.log.warn('    skipping model fit due psf fit failure')
         elif boot.result['psf_flux']['flags']!=0:
-            self.log.info('    skipping model fit due psf flux fit failure')
+            self.log.warn('    skipping model fit due psf flux fit failure')
         else:
             boot.fit_model()
 
