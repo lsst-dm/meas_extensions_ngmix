@@ -77,11 +77,16 @@ class NGMixTestCase(lsst.utils.tests.TestCase):
             max_pars={'method':'lm',
                       'lm_pars':{'maxfev':4000}}
 
-            prior=ngmix.joint_prior.make_uniform_simple_sep(
-                [0.0,0.0],     # cen
-                [0.1,0.1],     # g
-                [-10.0,3500.], # T
-                [-0.97,1.0e9], # flux
+            cen_prior = ngmix.priors.CenPrior(0.0, 0.0, 0.2, 0.2)
+            g_prior = ngmix.priors.GPriorBA(0.3)
+            T_prior = ngmix.priors.FlatPrior(-10.0, 3500.)
+            F_prior = ngmix.priors.FlatPrior(-0.97, 1.0e9)
+
+            prior = ngmix.joint_prior.PriorSimpleSep(
+                 cen_prior,
+                 g_prior,
+                 T_prior,
+                 F_prior,
             )
 
             boot=ngmix.bootstrap.Bootstrapper(obs)

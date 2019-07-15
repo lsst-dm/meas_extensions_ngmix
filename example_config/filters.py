@@ -1,1 +1,1 @@
-config.filters = ['g', 'r', 'i', 'z', 'y']
+config.filters = ['g', 'r', 'i', 'z']
