@@ -190,12 +190,12 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
                     mbobs = extractor.get_mbobs(refRecord)
                     res = self._process_observations(ref['id'][n], mbobs)
                 except MBObsMissingDataError as err:
-                    self.log.warn(str(err))
+                    self.log.debug(str(err))
                     mbobs = None
                     res=self._get_default_result()
                 except ngmix.GMixFatalError as err:
                     # this occurs when we have an all zero weight map
-                    self.log.warn(str(err))
+                    self.log.debug(str(err))
                     mbobs = None
                     res = self._get_default_result()
                     res['flags'] = procflags.HIGH_MASKFRAC
@@ -249,7 +249,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
                     band=self.cdict['filters'][iband]
 
-                    self.log.warn(
+                    self.log.debug(
                         'setting IMAGE_FLAGS '
                         'because in band %s one of these '
                         'are set %s' % (band,str(bitnames_to_cut))
@@ -273,7 +273,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         for iband,frac in enumerate(maskfrac_byband):
             if frac > mzfrac:
                 band=self.cdict['filters'][iband]
-                self.log.warn(
+                self.log.debug(
                     'setting HIGH_MASKFRAC in filter %s '
                     'because zero weight frac '
                     'exceeds max: %g > %g' % (band,frac,mzfrac)

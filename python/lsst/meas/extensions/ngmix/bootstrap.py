@@ -139,7 +139,7 @@ class MaxBootstrapper(BootstrapperBase):
                 tres['T'] = T
             else:
                 filt=self.cdict['filters'][band]
-                logger.warn('psf fit failed for filter %s' % filt)
+                logger.debug('psf fit failed for filter %s' % filt)
 
             pres_byband.append(tres)
 
@@ -172,7 +172,7 @@ class MaxBootstrapper(BootstrapperBase):
             if not obs_list[0].has_psf_gmix():
                 filt=self.cdict['filters'][band]
                 tres={'flags':procflags.NO_ATTEMPT}
-                logger.warn('not fitting psf flux in '
+                logger.debug('not fitting psf flux in '
                       'filter %s due to missing PSF fit' % filt)
             else: 
                 fitter=ngmix.fitting.TemplateFluxFitter(
@@ -185,7 +185,7 @@ class MaxBootstrapper(BootstrapperBase):
                 tres=fitter.get_result()
 
             if tres['flags'] != 0:
-                logger.warn('psf flux fit failed: %s' % tres['flags'])
+                logger.debug('psf flux fit failed: %s' % tres['flags'])
                 pfres['flags'] |= procflags.PSF_FLUX_FIT_FAILURE 
                 res['flags'] |= procflags.PSF_FLUX_FIT_FAILURE 
 
@@ -384,10 +384,10 @@ class MetacalMaxBootstrapper(object):
         boot.fit_psf_fluxes()
 
         if boot.result['psf']['flags'] !=0:
-            logger.warn('skipping model fit due psf fit failure')
+            logger.debug('skipping model fit due psf fit failure')
             res['mcal_flags'] |= procflags.METACAL_PSF_FAILURE
         elif boot.result['psf_flux']['flags']!=0:
-            logger.warn('skipping model fit due psf flux fit failure')
+            logger.debug('skipping model fit due psf flux fit failure')
             res['mcal_flags'] |= procflags.METACAL_PSF_FLUX_FAILURE
         else:
             boot.fit_model()
@@ -407,7 +407,7 @@ class MetacalMaxBootstrapper(object):
         boot.fit_psfs()
 
         if boot.result['psf']['flags'] != 0:
-            logger.warn('cannot do symmetrize psf due to psf fitting failures')
+            logger.debug('cannot do symmetrize psf due to psf fitting failures')
             # TODO need finer grained flag
             res['mcal_flags'] = procflags.METACAL_PSF_FAILURE
             return res

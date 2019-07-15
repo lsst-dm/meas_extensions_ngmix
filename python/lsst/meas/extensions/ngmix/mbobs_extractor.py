@@ -289,7 +289,7 @@ class MBObsExtractor(object):
             medvar = np.median(var_image[wuse])
             weight[:,:] = 1.0/medvar
         else:
-            self.log.warn('    weight is all zero, found none that passed cuts')
+            self.log.debug('    weight is all zero, found none that passed cuts')
             #_print_bits(maskobj, bitnames_to_ignore)
 
         bitnames_to_null = self.config['stamps']['bits_to_null']
