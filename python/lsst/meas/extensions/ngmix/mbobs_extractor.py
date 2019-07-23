@@ -1,10 +1,9 @@
 import numpy as np
 import ngmix
 import lsst.log
-from lsst.geom import Extent2D
-import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 from lsst.pex.exceptions import InvalidParameterError
+import lsst.geom as geom
 
 from . import util
 
@@ -225,13 +224,13 @@ class MBObsExtractor(object):
         xy0 = imobj.getXY0()
 
         orig_cen = imobj.getWcs().skyToPixel(rec.getCoord())
-        cen = orig_cen - Extent2D(xy0)
+        cen = orig_cen - geom.Extent2D(xy0)
         row=cen.getY()
         col=cen.getX()
 
         wcs = imobj.getWcs().linearizePixelToSky(
             orig_cen,
-            afwGeom.arcseconds,
+            geom.arcseconds,
         )
         jmatrix = wcs.getLinear().getMatrix()
 
@@ -327,8 +326,8 @@ def _project_box(source, wcs, radius):
     """
     create a box for the input source
     """
-    pixel = afwGeom.Point2I(wcs.skyToPixel(source.getCoord()))
-    box = afwGeom.Box2I()
+    pixel = geom.Point2I(wcs.skyToPixel(source.getCoord()))
+    box = geom.Box2I()
     box.include(pixel)
     box.grow(radius)
     return box
@@ -343,7 +342,7 @@ def _get_padded_sub_image(original, bbox):
         return original.Factory(original, bbox, afwImage.PARENT, True)
 
     result = original.Factory(bbox)
-    bbox2 = afwGeom.Box2I(bbox)
+    bbox2 = geom.Box2I(bbox)
     bbox2.clip(region)
     if isinstance(original, afwImage.Exposure):
         result.setPsf(original.getPsf())
