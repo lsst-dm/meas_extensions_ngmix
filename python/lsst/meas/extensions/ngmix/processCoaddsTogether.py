@@ -87,7 +87,8 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
     _DefaultName = "processCoaddsTogether"
     ConfigClass = ProcessCoaddsTogetherConfig
 
-    # This feeds the runDataRef() method all bands at once, rather than each one separately.
+    # This feeds the runDataRef() method all bands at once, rather than each
+    # one separately.
     # The name reflects how it's used elsewhere, not what it does
     RunnerClass = MergeSourcesRunner
 

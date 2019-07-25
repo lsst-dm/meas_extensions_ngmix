@@ -53,7 +53,8 @@ class ConverterTestCase(ShapeletTestCase):
         image2.array[:, :] = gmix1.make_image(image2.array.shape)
         self.assertImagesAlmostEqual(image1, image2)
 
-        # Should reject ShapeletFunctions with order > 0, unless ignoreHighOrder==True
+        # Should reject ShapeletFunctions with order > 0,
+        # unless ignoreHighOrder==True
         with self.assertRaises(ValueError):
             problematic = MultiShapeletFunction([self.makeRandomShapeletFunction(order=2) for n in range(4)])
             convertMultiShapeletToGMix(problematic)

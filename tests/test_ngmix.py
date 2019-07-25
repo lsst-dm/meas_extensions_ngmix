@@ -34,20 +34,20 @@ class NGMixTestCase(lsst.utils.tests.TestCase):
         try to import the primary code
         """
         try:
-            import ngmix
+            import ngmix  # noqa: F401
             ok = True
-        except:
+        except Exception:
             ok = False
 
-        self.assertEqual(ok, True)
+        self.assertTrue(ok)
 
         try:
-            import lsst.meas.extensions.ngmix
+            import lsst.meas.extensions.ngmix  # noqa: F401
             ok = True
-        except:
+        except Exception:
             ok = False
 
-        self.assertEqual(ok, True)
+        self.assertTrue(ok)
 
     def testExp(self):
         """

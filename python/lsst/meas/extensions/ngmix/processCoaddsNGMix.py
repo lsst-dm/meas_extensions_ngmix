@@ -201,7 +201,8 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
             self._copy_result(mbobs, res, outRecord)
 
-            # Remove the deblended pixels for this object so we can process the next one.
+            # Remove the deblended pixels for this object so we can process
+            # the next one.
             if replacers is not None:
                 for r in replacers.values():
                     r.removeSource(refRecord.getId())
@@ -472,7 +473,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             # mean over filters
             (pn('g2_mean'), 'mean over filters of component 2 of the PSF ellipticity', np.float64, ''),
             (pn('g1_mean'), 'mean over filters of component 2 of the PSF ellipticity', np.float64, ''),
-            (pn('T_mean'), 'mean over filters <x^2> + <y^2> for the gaussian mixture', np.float64, 'arcsec^2'),
+            (pn('T_mean'), 'mean over filters <x^2> + <y^2> for the gaussian mixture', np.float64,
+             'arcsec^2'),
         ]
 
         # PSF measurements by filter
@@ -491,7 +493,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         for filt in config['filters']:
             pfn = self.get_psf_flux_namer(filt)
             mtypes += [
-                (pfn('flux_flags'), 'flags for PSF template flux fitting in the %s filter' % filt, np.float64, ''),
+                (pfn('flux_flags'), 'flags for PSF template flux fitting in the %s filter' % filt,
+                 np.float64, ''),
                 (pfn('flux'), 'PSF template flux in the %s filter' % filt, np.float64, ''),
                 (pfn('flux_err'), 'error on PSF template flux in the %s filter' % filt, np.float64, ''),
             ]
@@ -828,7 +831,8 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             # mean over filters
             (pn('g2_mean'), 'mean over filters of component 2 of the PSF ellipticity', np.float64, ''),
             (pn('g1_mean'), 'mean over filters of component 2 of the PSF ellipticity', np.float64, ''),
-            (pn('T_mean'), 'mean over filters <x^2> + <y^2> for the gaussian mixture', np.float64, 'arcsec^2'),
+            (pn('T_mean'), 'mean over filters <x^2> + <y^2> for the gaussian mixture', np.float64,
+             'arcsec^2'),
         ]
 
         # PSF measurements by filter
@@ -847,9 +851,14 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         # for filt in config['filters']:
         #    pfn=self.get_psf_flux_namer(filt)
         #    mtypes += [
-        #        (pfn('flux_flags'),'flags for PSF template flux fitting in the %s filter' % filt,np.float64,''),
-        #        (pfn('flux'),'PSF template flux in the %s filter' % filt,np.float64,''),
-        #        (pfn('flux_err'),'error on PSF template flux in the %s filter' % filt,np.float64,''),
+        #        (pfn('flux_flags'),
+        #         'flags for PSF template flux fitting in the %s filter' %
+        #         filt,np.float64, ''),
+        #        (pfn('flux'),'PSF template flux in the %s filter' % filt,
+        #         np.float64, ''),
+        #        (pfn('flux_err'),
+        #         'error on PSF template flux in the %s filter' % filt,
+        #         np.float64, ''),
         #    ]
 
         # object fitting related fields
@@ -976,7 +985,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             self._copy_psf_fit_result(res['noshear']['psf'], output)
             self._copy_psf_fit_results_byband(res['noshear']['psf'], output)
 
-            #self._copy_psf_flux_results_byband(res['psf_flux'], output)
+            # self._copy_psf_flux_results_byband(res['psf_flux'], output)
 
             self._copy_model_result(res, output)
 
@@ -1182,8 +1191,7 @@ class ProcessDeblendedCoaddsNGMixMaxTask(ProcessCoaddsNGMixMaxTask):
         make sure we are using the deblended images
         """
         check = (
-            replacers is not None
-            and
+            replacers is not None and
             self.cdict['useDeblends'] is True
         )
         assert check,\
@@ -1207,8 +1215,7 @@ class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
         make sure we are using the deblended images
         """
         check = (
-            replacers is not None
-            and
+            replacers is not None and
             self.cdict['useDeblends'] is True
         )
         assert check,\
@@ -1260,7 +1267,7 @@ def make_image_plots(id, images, ncols=1, titles=None, show=False):
         fig.colorbar(implt, cax=cax)
         a.set_title(title)
 
-    #fig.set_size_inches(np.array(fig.get_size_inches()) * n_images)
+    # fig.set_size_inches(np.array(fig.get_size_inches()) * n_images)
     plt.tight_layout()
     if show:
         plt.show()

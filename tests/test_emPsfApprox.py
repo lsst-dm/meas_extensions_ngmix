@@ -49,7 +49,8 @@ def makeGaussianArray(size, sigma, xc=None, yc=None):
 
 
 def runMeasure(task, schema, exposure):
-    """Run a measurement task which has previously been initialized on a single source
+    """Run a measurement task which has previously been initialized on a
+    single source.
     """
     cat = afwTable.SourceCatalog(schema)
     source = cat.addNew()
@@ -71,7 +72,8 @@ def runMeasure(task, schema, exposure):
 
 
 def makePsf(size, sigma1, mult1, sigma2, mult2):
-    """make a Gaussian with one or two components.  Always square of dimensions size x size
+    """make a Gaussian with one or two components.  Always square of
+    dimensions size x size.
     """
     array0 = makeGaussianArray(size, sigma1)
     array0 *= mult1
@@ -81,7 +83,7 @@ def makePsf(size, sigma1, mult1, sigma2, mult2):
     return measAlg.KernelPsf(kernel)
 
 
-class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
+class TestEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
     """A test case for shape measurement"""
 
     def setUp(self):
@@ -115,8 +117,8 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         self.assertEqual(source.get(self.algName + "_flag_rangeError"), False)
         self.assertEqual(source.get(self.algName + "_flag_maxIter"), False)
 
-    #   Test to be sure that we can catch the maximum iterations error
     def testMaxIter(self):
+        """Test to be sure that we can catch the maximum iterations error."""
         msConfig = self.makeConfig()
         msConfig.plugins[self.algName].nGauss = 2
         msConfig.plugins[self.algName].tolerance = 1e-10
@@ -132,8 +134,8 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         self.assertEqual(source.get(self.algName + "_flag_rangeError"), False)
         self.assertEqual(source.get(self.algName + "_flag_maxIter"), True)
 
-    #   Test to be sure that we can catch the missing psf error
     def testMissingPsf(self):
+        """Test to be sure that we can catch the missing psf error."""
         msConfig = self.makeConfig()
         schema = afwTable.SourceTable.makeMinimalSchema()
         task = measBase.SingleFrameMeasurementTask(schema=schema, config=msConfig)
@@ -146,8 +148,10 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
             self.assertEqual(source.get(self.algName + "_flag_rangeError"), False)
             self.assertEqual(source.get(self.algName + "_flag_maxIter"), False)
 
-    #   Test that the EmPsfApprox plugin produces a more or less reasonable result
     def testEMPlugin(self):
+        """Test that the EmPsfApprox plugin produces a more or less reasonable
+        result."""
+
         msConfig = self.makeConfig()
         msConfig.plugins[self.algName].nGauss = 2
         schema = afwTable.SourceTable.makeMinimalSchema()
@@ -168,8 +172,8 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         self.msfKey = lsst.shapelet.MultiShapeletFunctionKey(schema[self.algName],
                                                              lsst.shapelet.HERMITE)
 
-        #   check the two component result to be sure it is close to the input PSF
-        #   we don't control the order of EmPsfApprox, so order by size.
+        # check the two component result to be sure it is close to the input
+        # PSF we don't control the order of EmPsfApprox, so order by size.
         msf = source.get(self.msfKey)
         components = msf.getComponents()
         self.assertEqual(len(components), 2)
@@ -181,9 +185,10 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
             temp = comp1
             comp1 = comp0
             comp0 = temp
-        #  We are not looking for really close matches in this unit test, which is why
-        #  the tolerances are set rather large.  Really just a check that we are getting
-        #  some kind of reasonable value for the fit.  A more quantitative test may be needed.
+        # We are not looking for really close matches in this unit test,
+        # which is why the tolerances are set rather large.  Really just a
+        # check that we are getting some kind of reasonable value for the fit.
+        # A more quantitative test may be needed.
         self.assertFloatsAlmostEqual(flux0/flux1, 7.0/3.0, rtol=.05)
         self.assertFloatsAlmostEqual(comp0.getEllipse().getCore().getIxx(), 16.0, rtol=.05)
         self.assertFloatsAlmostEqual(comp0.getEllipse().getCore().getIyy(), 16.0, rtol=.05)

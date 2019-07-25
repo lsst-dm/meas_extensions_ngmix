@@ -148,10 +148,10 @@ class MBObsExtractor(object):
         maskobj = imobj_sub.mask
         bmask = maskobj.array
 
-        #cen = rec.getCentroid()
+        # cen = rec.getCentroid()
         orig_cen = imobj_sub.getWcs().skyToPixel(rec.getCoord())
         psf_im = self._extract_psf_image(imobj_sub, orig_cen)
-        #psf_im = imobj_sub.getPsf().computeKernelImage(orig_cen).array
+        # psf_im = imobj_sub.getPsf().computeKernelImage(orig_cen).array
 
         # fake the psf pixel noise
         psf_err = psf_im.max()*0.0001
@@ -277,8 +277,7 @@ class MBObsExtractor(object):
         bits_to_ignore = util.get_ored_bits(maskobj, bitnames_to_ignore)
 
         wuse = np.where(
-            (var_image > 0)
-            &
+            (var_image > 0) &
             ((mask & bits_to_ignore) == 0)
         )
 
@@ -287,7 +286,7 @@ class MBObsExtractor(object):
             weight[:, :] = 1.0/medvar
         else:
             self.log.debug('    weight is all zero, found none that passed cuts')
-            #_print_bits(maskobj, bitnames_to_ignore)
+            # _print_bits(maskobj, bitnames_to_ignore)
 
         bitnames_to_null = self.config['stamps']['bits_to_null']
         if len(bitnames_to_null) > 0:
@@ -303,8 +302,9 @@ class MBObsExtractor(object):
         """
         check for consistency between the images.
 
-        TODO An assertion is currently used, we may want to raise an appropriate
-        exception
+        .. todo::
+           An assertion is currently used, we may want to raise an
+           appropriate exception.
         """
         xy0 = None
         for filt in self.config['filters']:
@@ -346,7 +346,7 @@ def _get_padded_sub_image(original, bbox):
         result.setPsf(original.getPsf())
         result.setWcs(original.getWcs())
         result.setPhotoCalib(original.getPhotoCalib())
-        #result.image.array[:, :] = float("nan")
+        # result.image.array[:, :] = float("nan")
         result.image.array[:, :] = 0.0
         result.variance.array[:, :] = float("inf")
         result.mask.array[:, :] = np.uint16(result.mask.getPlaneBitMask("NO_DATA"))
