@@ -192,12 +192,14 @@ class testEMTestCase(AlgorithmTestCase, lsst.utils.tests.TestCase):
         self.assertFloatsAlmostEqual(comp1.getEllipse().getCore().getIyy(), 100.0, rtol=.05)
         self.assertFloatsAlmostEqual(comp1.getEllipse().getCore().getIxy(), 0.0, atol=.1)
 
+
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass
 
 
 def setup_module(module):
     lsst.utils.tests.init()
+
 
 if __name__ == "__main__":
     lsst.utils.tests.init()

@@ -7,13 +7,15 @@ import lsst.geom as geom
 
 from . import util
 
+
 class MBObsMissingDataError(Exception):
     """
     Some number was out of range
     """
+
     def __init__(self, value):
-         super(MBObsMissingDataError, self).__init__(value)
-         self.value = value
+        super(MBObsMissingDataError, self).__init__(value)
+        self.value = value
 
     def __str__(self):
         return repr(self.value)
@@ -29,10 +31,11 @@ class MBObsExtractor(object):
         A dictionary of image objects
 
     """
+
     def __init__(self, config, images):
-        self.config=config
-        self.images=images
-        self.log=lsst.log.Log.getLogger("meas.extensions.ngmix.MBObsExtractor")
+        self.config = config
+        self.images = images
+        self.log = lsst.log.Log.getLogger("meas.extensions.ngmix.MBObsExtractor")
 
         self._verify()
 
@@ -53,7 +56,7 @@ class MBObsExtractor(object):
             ngmix multi-band observation list
         """
 
-        mbobs=ngmix.MultiBandObsList()
+        mbobs = ngmix.MultiBandObsList()
 
         for filt in self.config['filters']:
             # TODO: run noise replacers here
@@ -65,7 +68,7 @@ class MBObsExtractor(object):
 
             obs = self._extract_obs(subim, rec)
 
-            obslist=ngmix.ObsList()
+            obslist = ngmix.ObsList()
             obslist.append(obs)
             mbobs.append(obslist)
 
@@ -107,7 +110,7 @@ class MBObsExtractor(object):
         quad = rec.getShape()
         T = quad.getIxx() + quad.getIyy()
         if np.isnan(T):
-            T=4.0
+            T = 4.0
 
         sigma = np.sqrt(T/2.0)
         radius = sconf['sigma_factor']*sigma
@@ -122,8 +125,6 @@ class MBObsExtractor(object):
 
         return radius, stamp_size
 
-
-
     def _extract_obs(self, imobj_sub, rec):
         """
         convert an image object into an ngmix.Observation, including
@@ -135,11 +136,11 @@ class MBObsExtractor(object):
             TODO I don't actually know what class this is
         rec: an object record
             TODO I don't actually know what class this is
-            
+
         returns
         --------
         obs: ngmix.Observation
-            The Observation, including 
+            The Observation, including
         """
 
         im = imobj_sub.image.array
@@ -155,7 +156,7 @@ class MBObsExtractor(object):
         # fake the psf pixel noise
         psf_err = psf_im.max()*0.0001
         psf_wt = psf_im*0 + 1.0/psf_err**2
-        
+
         jacob = self._extract_jacobian(imobj_sub, rec)
 
         # use canonical center for the psf
@@ -167,7 +168,7 @@ class MBObsExtractor(object):
         # get from the mask object
         # this is sort of monkey patching, but I'm not sure of
         # a better solution
-        meta = {'maskobj':maskobj}
+        meta = {'maskobj': maskobj}
 
         psf_obs = ngmix.Observation(
             psf_im,
@@ -195,15 +196,14 @@ class MBObsExtractor(object):
         """
         try:
             psfobj = stamp.getPsf()
-            psfim  = psfobj.computeKernelImage(orig_pos).array
+            psfim = psfobj.computeKernelImage(orig_pos).array
         except InvalidParameterError:
             raise MBObsMissingDataError("could not reconstruct PSF")
 
-        psfim  = np.array(psfim, dtype='f4', copy=False)
+        psfim = np.array(psfim, dtype='f4', copy=False)
 
         psfim = util.trim_odd_image(psfim)
         return psfim
-
 
     def _extract_jacobian(self, imobj, rec):
         """
@@ -214,7 +214,7 @@ class MBObsExtractor(object):
             TODO I don't actually know what class this is
         rec: an object record
             TODO I don't actually know what class this is
-            
+
         returns
         --------
         Jacobian: ngmix.Jacobian
@@ -225,8 +225,8 @@ class MBObsExtractor(object):
 
         orig_cen = imobj.getWcs().skyToPixel(rec.getCoord())
         cen = orig_cen - geom.Extent2D(xy0)
-        row=cen.getY()
-        col=cen.getX()
+        row = cen.getY()
+        col = cen.getX()
 
         wcs = imobj.getWcs().linearizePixelToSky(
             orig_cen,
@@ -237,15 +237,14 @@ class MBObsExtractor(object):
         jacob = ngmix.Jacobian(
             row=row,
             col=col,
-            dudrow = jmatrix[0,0],
-            dudcol = jmatrix[0,1],
-            dvdrow = jmatrix[1,0],
-            dvdcol = jmatrix[1,1],
+            dudrow=jmatrix[0, 0],
+            dudcol=jmatrix[0, 1],
+            dvdrow=jmatrix[1, 0],
+            dvdcol=jmatrix[1, 1],
         )
 
         self.log.debug("jacob: %s" % repr(jacob))
         return jacob
-
 
     def _extract_weight(self, imobj):
         """
@@ -265,51 +264,49 @@ class MBObsExtractor(object):
         imobj: an image object
             TODO I don't actually know what class this is
         """
-        var_image  = imobj.variance.array
+        var_image = imobj.variance.array
         maskobj = imobj.mask
         mask = maskobj.array
 
-
         weight = var_image.copy()
 
-        weight[:,:]=0
+        weight[:, :] = 0
 
         bitnames_to_ignore = self.config['stamps']['bits_to_ignore_for_weight']
 
-        bits_to_ignore=util.get_ored_bits(maskobj, bitnames_to_ignore)
+        bits_to_ignore = util.get_ored_bits(maskobj, bitnames_to_ignore)
 
-        wuse=np.where(
+        wuse = np.where(
             (var_image > 0)
             &
-            ( (mask & bits_to_ignore) == 0 )
+            ((mask & bits_to_ignore) == 0)
         )
 
         if wuse[0].size > 0:
             medvar = np.median(var_image[wuse])
-            weight[:,:] = 1.0/medvar
+            weight[:, :] = 1.0/medvar
         else:
             self.log.debug('    weight is all zero, found none that passed cuts')
             #_print_bits(maskobj, bitnames_to_ignore)
 
         bitnames_to_null = self.config['stamps']['bits_to_null']
         if len(bitnames_to_null) > 0:
-            bits_to_null=util.get_ored_bits(maskobj, bitnames_to_null)
-            wnull=np.where( (mask & bits_to_null) != 0 )
+            bits_to_null = util.get_ored_bits(maskobj, bitnames_to_null)
+            wnull = np.where((mask & bits_to_null) != 0)
             if wnull[0].size > 0:
                 self.log.debug('    nulling %d in weight' % wnull[0].size)
                 weight[wnull] = 0.0
 
         return weight
 
-
     def _verify(self):
         """
-        check for consistency between the images. 
-        
+        check for consistency between the images.
+
         TODO An assertion is currently used, we may want to raise an appropriate
         exception
         """
-        xy0=None
+        xy0 = None
         for filt in self.config['filters']:
             if filt not in self.images:
                 raise MBObsMissingDataError('band missing: %s' % filt)
@@ -319,7 +316,7 @@ class MBObsExtractor(object):
                 xy0 = imf.getXY0()
             else:
                 assert xy0 == imf.getXY0(),\
-                        "all images must have same reference position"
+                    "all images must have same reference position"
 
 
 def _project_box(source, wcs, radius):
@@ -331,6 +328,7 @@ def _project_box(source, wcs, radius):
     box.include(pixel)
     box.grow(radius)
     return box
+
 
 def _get_padded_sub_image(original, bbox):
     """
@@ -358,18 +356,18 @@ def _get_padded_sub_image(original, bbox):
     elif isinstance(original, afwImage.ImageI):
         result.array[:, :] = 0
         subIn = afwImage.ImageI(original, bbox=bbox2,
-                               origin=afwImage.PARENT, deep=False)
+                                origin=afwImage.PARENT, deep=False)
         result.assign(subIn, bbox=bbox2, origin=afwImage.PARENT)
     else:
         raise ValueError("Image type not supported")
     return result
 
-def _print_bits(maskobj, bitnames):
-    mask=maskobj.array
-    bits=0
-    for ibit,bitname in enumerate(bitnames):
-        bitval = maskobj.getPlaneBitMask(bitname)
-        w=np.where( (mask & bitval) != 0 )
-        if w[0].size > 0:
-            print('%s %d %d/%d' % (bitname,bitval,w[0].size,mask.size))
 
+def _print_bits(maskobj, bitnames):
+    mask = maskobj.array
+    bits = 0
+    for ibit, bitname in enumerate(bitnames):
+        bitval = maskobj.getPlaneBitMask(bitname)
+        w = np.where((mask & bitval) != 0)
+        if w[0].size > 0:
+            print('%s %d %d/%d' % (bitname, bitval, w[0].size, mask.size))
