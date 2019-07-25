@@ -773,7 +773,6 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
             conf = self.cdict
             nband = len(conf['filters'])
-            model = conf['obj']['model']
             self._prior = priors.get_joint_prior(
                 conf['obj'],
                 nband,
@@ -1092,7 +1091,6 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         get a namer for this output type
         """
-        front = 'mcal'
 
         back = None
         if type is not None:
@@ -1163,7 +1161,6 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 
             conf = self.cdict
             nband = len(conf['filters'])
-            model = conf['obj']['model']
             self._prior = priors.get_joint_prior(
                 conf['obj'],
                 nband,

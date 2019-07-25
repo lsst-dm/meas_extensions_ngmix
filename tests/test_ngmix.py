@@ -146,7 +146,6 @@ class NGMixTestCase(lsst.utils.tests.TestCase):
         gm_psf = ngmix.GMixModel(pars_psf, self.psf_model)
 
         pars_obj = np.array([0.0, 0.0, self.g1, self.g2, self.T, self.counts])
-        npars = pars_obj.size
         gm_obj0 = ngmix.GMixModel(pars_obj, model)
 
         gm = gm_obj0.convolve(gm_psf)

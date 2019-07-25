@@ -365,7 +365,6 @@ def _get_padded_sub_image(original, bbox):
 
 def _print_bits(maskobj, bitnames):
     mask = maskobj.array
-    bits = 0
     for ibit, bitname in enumerate(bitnames):
         bitval = maskobj.getPlaneBitMask(bitname)
         w = np.where((mask & bitval) != 0)

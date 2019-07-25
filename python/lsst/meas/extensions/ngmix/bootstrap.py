@@ -8,7 +8,6 @@ Also we don't plan to support multi-epoch fitting so these can be simplified
 import lsst.log
 import numpy as np
 import ngmix
-from ngmix.gexceptions import GMixRangeError, BootPSFFailure, BootGalFailure
 from . import procflags
 
 from copy import deepcopy

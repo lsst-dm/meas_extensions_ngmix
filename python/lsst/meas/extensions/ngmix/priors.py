@@ -1,5 +1,4 @@
 import ngmix
-from ngmix.joint_prior import PriorSimpleSep, PriorBDFSep
 
 
 def get_joint_prior(objconf, nband, rng):
