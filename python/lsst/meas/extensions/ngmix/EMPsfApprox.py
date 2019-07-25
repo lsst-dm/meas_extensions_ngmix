@@ -59,9 +59,11 @@ class SingleFrameEmPsfApproxConfig(SingleFramePluginConfig):
 @register("ngmix_EMPsfApprox")
 class SingleFrameEmPsfApproxPlugin(SingleFramePlugin):
     """
-    Plugin to do Psf modeling using the ngmix Expectation-Maximization Algorithm.
+    Plugin to do Psf modeling using the ngmix Expectation-Maximization
+    Algorithm.
     Calls the ngmix fitter ngmix.EMRunner with an image of the Psf.
-    Returns nGauss Gaussians stored as lsst.shapelet.ShapeletFunction components.
+    Returns nGauss Gaussians stored as lsst.shapelet.ShapeletFunction
+    components.
     """
     ConfigClass = SingleFrameEmPsfApproxConfig
 

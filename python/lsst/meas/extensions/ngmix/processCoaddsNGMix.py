@@ -93,7 +93,6 @@ __all__ = (
 )
 
 
-
 class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
     """
     Base class for ngmix tasks
@@ -106,8 +105,8 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         """
         get a dict version of the configuration
         """
-        if not hasattr(self,'_cdict'):
-            self._cdict=self.config.toDict()
+        if not hasattr(self, '_cdict'):
+            self._cdict = self.config.toDict()
         return self._cdict
 
     def run(self, images, ref, replacers, imageId):
@@ -116,7 +115,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         This method should not add or modify self.
 
         So far all children are u sing this exact code so leaving
-        it here for now. If we specialize a lot, might make a 
+        it here for now. If we specialize a lot, might make a
         processor its own object
 
         Parameters
@@ -148,7 +147,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
         self.set_rng(imageId)
 
-        config=self.cdict
+        config = self.cdict
         self.log.info(pprint.pformat(config))
 
         try:
@@ -163,14 +162,14 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         # Add mostly-empty rows to it, copying IDs from the ref catalog.
         output.extend(ref, mapper=self.mapper)
 
-        index_range=self.get_index_range(output)
+        index_range = self.get_index_range(output)
 
         for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
             if n < index_range[0] or n > index_range[1]:
                 continue
 
             if (n % 100) == 0:
-                self.log.info('index: %06d/%06d' % (n,index_range[1]))
+                self.log.info('index: %06d/%06d' % (n, index_range[1]))
             nproc += 1
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
@@ -182,7 +181,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
             if extractor is None:
                 # we were missing a band most likely
-                res=self._get_default_result()
+                res = self._get_default_result()
                 mbobs = None
             else:
 
@@ -192,7 +191,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
                 except MBObsMissingDataError as err:
                     self.log.debug(str(err))
                     mbobs = None
-                    res=self._get_default_result()
+                    res = self._get_default_result()
                 except ngmix.GMixFatalError as err:
                     # this occurs when we have an all zero weight map
                     self.log.debug(str(err))
@@ -202,7 +201,8 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
             self._copy_result(mbobs, res, outRecord)
 
-            # Remove the deblended pixels for this object so we can process the next one.
+            # Remove the deblended pixels for this object so we can process
+            # the next one.
             if replacers is not None:
                 for r in replacers.values():
                     r.removeSource(refRecord.getId())
@@ -238,21 +238,21 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         flags = 0
 
         bitnames_to_cut = self.cdict['stamps']['bits_to_cut']
-        for iband,obslist in enumerate(mbobs):
-            obs=obslist[0]
+        for iband, obslist in enumerate(mbobs):
+            obs = obslist[0]
 
             if len(bitnames_to_cut) > 0:
                 maskobj = obs.meta['maskobj']
-                bits_to_cut=util.get_ored_bits(maskobj, bitnames_to_cut)
-                w=np.where( (obs.bmask & bits_to_cut) != 0 )
+                bits_to_cut = util.get_ored_bits(maskobj, bitnames_to_cut)
+                w = np.where((obs.bmask & bits_to_cut) != 0)
                 if w[0].size > 0:
 
-                    band=self.cdict['filters'][iband]
+                    band = self.cdict['filters'][iband]
 
                     self.log.debug(
                         'setting IMAGE_FLAGS '
                         'because in band %s one of these '
-                        'are set %s' % (band,str(bitnames_to_cut))
+                        'are set %s' % (band, str(bitnames_to_cut))
                     )
                     flags |= procflags.IMAGE_FLAGS
 
@@ -270,13 +270,13 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         if mzfrac >= 1.0:
             return flags
 
-        for iband,frac in enumerate(maskfrac_byband):
+        for iband, frac in enumerate(maskfrac_byband):
             if frac > mzfrac:
-                band=self.cdict['filters'][iband]
+                band = self.cdict['filters'][iband]
                 self.log.debug(
                     'setting HIGH_MASKFRAC in filter %s '
                     'because zero weight frac '
-                    'exceeds max: %g > %g' % (band,frac,mzfrac)
+                    'exceeds max: %g > %g' % (band, frac, mzfrac)
                 )
                 flags |= procflags.HIGH_MASKFRAC
 
@@ -288,18 +288,17 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         in any of the stamps
         """
 
-        nband=len(mbobs)
+        nband = len(mbobs)
         maskfrac_byband = np.zeros(nband)
 
-        for band,obslist in enumerate(mbobs):
+        for band, obslist in enumerate(mbobs):
             for obs in obslist:
 
-                w=np.where(obs.weight <= 0.0)
+                w = np.where(obs.weight <= 0.0)
                 maskfrac_byband[band] = w[0].size/float(obs.weight.size)
 
         maskfrac = maskfrac_byband.mean()
         return maskfrac, maskfrac_byband
-
 
     def _get_default_result(self):
         """
@@ -312,30 +311,29 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         Get the range of indices to process.  If these were not set in the
         configuration, [0,cat.size] is returned
         """
-        if not hasattr(self,'_index_range'):
+        if not hasattr(self, '_index_range'):
 
-            ntot=len(cat)
-            start=self.cdict['start_index']
-            num=self.cdict['num_to_process']
+            ntot = len(cat)
+            start = self.cdict['start_index']
+            num = self.cdict['num_to_process']
             if start is None:
-                start=0
+                start = 0
             else:
                 if start < 0 or start > ntot-1:
                     raise ValueError(
                         'requested start index %d out '
-                        'of bounds [%d,%d]' % (start,ntot-1)
+                        'of bounds [%d,%d]' % (start, ntot-1)
                     )
 
             if num is None:
-                num=ntot-start
+                num = ntot-start
             if num < 1:
                 raise ValueError(
                     'requested number to process %d '
                     'less than 1' % num
                 )
 
-
-            self._index_range=[start,start+num-1]
+            self._index_range = [start, start+num-1]
 
         return self._index_range
 
@@ -396,10 +394,10 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         self._rng = np.random.RandomState(seed)
 
     def _make_plots(self, id, mbobs):
-        filters=self.cdict['filters']
+        filters = self.cdict['filters']
 
-        imlist=[o[0].image for o in mbobs]
-        titles=[f for f in filters]
+        imlist = [o[0].image for o in mbobs]
+        titles = [f for f in filters]
 
         imlist += [o[0].weight for o in mbobs]
         titles += [f+' wt' for f in filters]
@@ -407,7 +405,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         imlist += [o[0].bmask for o in mbobs]
         titles += [f+' bmask' for f in filters]
 
-        plt=make_image_plots(
+        plt = make_image_plots(
             id,
             imlist,
             ncols=len(filters),
@@ -415,12 +413,13 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
             show=False,
         )
 
-        fname='images-%d.png' % id
+        fname = 'images-%d.png' % id
         if self.cdict['plot_prefix'] is not None:
             fname = self.cdict['plot_prefix'] + fname
 
         self.log.info('saving figure: %s' % fname)
         plt.savefig(fname)
+
 
 class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
     """
@@ -449,41 +448,42 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         self.mapper.addMinimalSchema(SourceCatalog.Table.makeMinimalSchema(), True)
         schema = self.mapper.getOutputSchema()
 
-        config=self.cdict
+        config = self.cdict
 
-        model=config['obj']['model']
-        n=self.get_namer()
-        pn=self.get_psf_namer()
-        mn=self.get_model_namer()
+        model = config['obj']['model']
+        n = self.get_namer()
+        pn = self.get_psf_namer()
+        mn = self.get_model_namer()
 
         # generic ngmix fields
-        mtypes=[
-            (n('flags'),'overall flags for the processing',np.int32,''),
-            (n('stamp_size'),'size of postage stamp',np.int32,''),
-            (n('maskfrac'),'mean masked fraction',np.float32,''),
+        mtypes = [
+            (n('flags'), 'overall flags for the processing', np.int32, ''),
+            (n('stamp_size'), 'size of postage stamp', np.int32, ''),
+            (n('maskfrac'), 'mean masked fraction', np.float32, ''),
         ]
         for filt in config['filters']:
             mtypes += [
-                (n('maskfrac_%s' % filt),'masked fraction in %s filter' % filt,np.float32,''),
+                (n('maskfrac_%s' % filt), 'masked fraction in %s filter' % filt, np.float32, ''),
             ]
 
         # psf fitting related fields
         mtypes += [
-            (pn('flags'),'overall flags for the PSF processing',np.int32,''),
+            (pn('flags'), 'overall flags for the PSF processing', np.int32, ''),
 
             # mean over filters
-            (pn('g2_mean'),'mean over filters of component 2 of the PSF ellipticity',np.float64,''),
-            (pn('g1_mean'),'mean over filters of component 2 of the PSF ellipticity',np.float64,''),
-            (pn('T_mean'),'mean over filters <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+            (pn('g2_mean'), 'mean over filters of component 2 of the PSF ellipticity', np.float64, ''),
+            (pn('g1_mean'), 'mean over filters of component 2 of the PSF ellipticity', np.float64, ''),
+            (pn('T_mean'), 'mean over filters <x^2> + <y^2> for the gaussian mixture', np.float64,
+             'arcsec^2'),
         ]
 
         # PSF measurements by filter
         for filt in config['filters']:
-            pfn=self.get_psf_namer(filt=filt)
+            pfn = self.get_psf_namer(filt=filt)
             mtypes += [
                 (pfn('flags'), 'overall flags for PSF processing in %s filter' % filt, np.int32, ''),
-                (pfn('row'),'offset from canonical row position',np.float64,'arcsec'),
-                (pfn('col'),'offset from canonical col position',np.float64,'arcsec'),
+                (pfn('row'), 'offset from canonical row position', np.float64, 'arcsec'),
+                (pfn('col'), 'offset from canonical col position', np.float64, 'arcsec'),
                 (pfn('g1'), 'component 1 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
                 (pfn('g2'), 'component 2 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
                 (pfn('T'), '<x^2> + <y^2> for the PSF in %s filter' % filt, np.float64, 'arcsec^2'),
@@ -491,48 +491,48 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         # PSF flux measurements, on the object, by filter
         for filt in config['filters']:
-            pfn=self.get_psf_flux_namer(filt)
+            pfn = self.get_psf_flux_namer(filt)
             mtypes += [
-                (pfn('flux_flags'),'flags for PSF template flux fitting in the %s filter' % filt,np.float64,''),
-                (pfn('flux'),'PSF template flux in the %s filter' % filt,np.float64,''),
-                (pfn('flux_err'),'error on PSF template flux in the %s filter' % filt,np.float64,''),
+                (pfn('flux_flags'), 'flags for PSF template flux fitting in the %s filter' % filt,
+                 np.float64, ''),
+                (pfn('flux'), 'PSF template flux in the %s filter' % filt, np.float64, ''),
+                (pfn('flux_err'), 'error on PSF template flux in the %s filter' % filt, np.float64, ''),
             ]
-
 
         # object fitting related fields
         mtypes += [
-            (mn('flags'),'flags for model fit',np.int32,''),
-            (mn('nfev'),'number of function evaluations during fit',np.int32,''),
-            (mn('chi2per'),'chi^2 per degree of freedom',np.float64,''),
-            (mn('dof'),'number of degrees of freedom',np.int32,''),
+            (mn('flags'), 'flags for model fit', np.int32, ''),
+            (mn('nfev'), 'number of function evaluations during fit', np.int32, ''),
+            (mn('chi2per'), 'chi^2 per degree of freedom', np.float64, ''),
+            (mn('dof'), 'number of degrees of freedom', np.int32, ''),
 
-            (mn('s2n'),'S/N for the fit',np.float64,''),
+            (mn('s2n'), 'S/N for the fit', np.float64, ''),
 
-            (mn('row'),'offset from canonical row position',np.float64,'arcsec'),
-            (mn('row_err'),'error on offset from canonical row position',np.float64,'arcsec'),
-            (mn('col'),'offset from canonical col position',np.float64,'arcsec'),
-            (mn('col_err'),'error on offset from canonical col position',np.float64,'arcsec'),
-            (mn('g1'),'component 1 of the ellipticity',np.float64,''),
-            (mn('g1_err'),'error on component 1 of the ellipticity',np.float64,''),
-            (mn('g2'),'component 2 of the ellipticity',np.float64,''),
-            (mn('g2_err'),'error on component 2 of the ellipticity',np.float64,''),
-            (mn('T'),'<x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
-            (mn('T_err'),'error on <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+            (mn('row'), 'offset from canonical row position', np.float64, 'arcsec'),
+            (mn('row_err'), 'error on offset from canonical row position', np.float64, 'arcsec'),
+            (mn('col'), 'offset from canonical col position', np.float64, 'arcsec'),
+            (mn('col_err'), 'error on offset from canonical col position', np.float64, 'arcsec'),
+            (mn('g1'), 'component 1 of the ellipticity', np.float64, ''),
+            (mn('g1_err'), 'error on component 1 of the ellipticity', np.float64, ''),
+            (mn('g2'), 'component 2 of the ellipticity', np.float64, ''),
+            (mn('g2_err'), 'error on component 2 of the ellipticity', np.float64, ''),
+            (mn('T'), '<x^2> + <y^2> for the gaussian mixture', np.float64, 'arcsec^2'),
+            (mn('T_err'), 'error on <x^2> + <y^2> for the gaussian mixture', np.float64, 'arcsec^2'),
         ]
-        if model in ['bd','bdf']:
+        if model in ['bd', 'bdf']:
             mtypes += [
-                (mn('fracdev'),'fraction of light in the bulge',np.float64,''),
-                (mn('fracdev_err'),'error on fraction of light in the bulge',np.float64,''),
+                (mn('fracdev'), 'fraction of light in the bulge', np.float64, ''),
+                (mn('fracdev_err'), 'error on fraction of light in the bulge', np.float64, ''),
             ]
 
         for filt in config['filters']:
-            mfn=self.get_model_flux_namer(filt)
+            mfn = self.get_model_flux_namer(filt)
             mtypes += [
-                (mfn('flux'),'flux in the %s filter' % filt,np.float64,''),
-                (mfn('flux_err'),'error on flux in the %s filter' % filt,np.float64,''),
+                (mfn('flux'), 'flux in the %s filter' % filt, np.float64, ''),
+                (mfn('flux_err'), 'error on flux in the %s filter' % filt, np.float64, ''),
             ]
 
-        for name,doc,dtype,units in mtypes:
+        for name, doc, dtype, units in mtypes:
             schema.addField(
                 name,
                 type=dtype,
@@ -567,22 +567,22 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         flags = self._check_obs(mbobs, maskfrac_byband)
         if flags != 0:
-            res=self._get_default_result()
+            res = self._get_default_result()
             res['maskfrac'], res['maskfrac_byband'] = maskfrac, maskfrac_byband
             res['flags'] = flags
             return res
 
-        boot=self._get_bootstrapper(mbobs)
+        boot = self._get_bootstrapper(mbobs)
         boot.fit_psfs()
         boot.fit_psf_fluxes()
-        if boot.result['psf']['flags'] !=0:
+        if boot.result['psf']['flags'] != 0:
             self.log.warn('    skipping model fit due psf fit failure')
-        elif boot.result['psf_flux']['flags']!=0:
+        elif boot.result['psf_flux']['flags'] != 0:
             self.log.warn('    skipping model fit due psf flux fit failure')
         else:
             boot.fit_model()
 
-        res=boot.result
+        res = boot.result
         res['maskfrac'], res['maskfrac_byband'] = maskfrac, maskfrac_byband
         return res
 
@@ -608,7 +608,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         copy the result dict to the output record
         """
 
-        n=self.get_namer()
+        n = self.get_namer()
 
         if mbobs is None:
             output[n('flags')] = procflags.NO_ATTEMPT
@@ -616,11 +616,11 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             output[n('flags')] = res['flags']
 
             stamp_shape = mbobs[0][0].image.shape
-            stamp_size=stamp_shape[0]
+            stamp_size = stamp_shape[0]
 
             output[n('stamp_size')] = stamp_size
             output[n('maskfrac')] = res['maskfrac']
-            for ifilt,filt in enumerate(self.cdict['filters']):
+            for ifilt, filt in enumerate(self.cdict['filters']):
                 output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
 
             self._copy_psf_fit_result(res['psf'], output)
@@ -635,33 +635,33 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         The statistics here are averaged over all bands
         """
 
-        n=self.get_psf_namer()
+        n = self.get_psf_namer()
         output[n('flags')] = pres['flags']
         if pres['flags'] == 0:
             output[n('g1_mean')] = pres['g1_mean']
             output[n('g2_mean')] = pres['g2_mean']
-            output[n('T_mean')]  = pres['T_mean']
+            output[n('T_mean')] = pres['T_mean']
 
     def _copy_psf_fit_results_byband(self, pres, output):
         """
         copy the PSF result from each band to the output record.
         """
 
-        if len(pres['byband'])==0:
+        if len(pres['byband']) == 0:
             return
 
-        config=self.cdict
-        for ifilt,filt in enumerate(config['filters']):
+        config = self.cdict
+        for ifilt, filt in enumerate(config['filters']):
             filt_res = pres['byband'][ifilt]
 
             if filt_res is not None:
-                n=self.get_psf_namer(filt=filt)
+                n = self.get_psf_namer(filt=filt)
 
                 output[n('flags')] = filt_res['flags']
                 output[n('row')] = filt_res['pars'][0]
                 output[n('col')] = filt_res['pars'][1]
-                if filt_res['flags']==0:
-                    for name in ['g1','g2','T']:
+                if filt_res['flags'] == 0:
+                    for name in ['g1', 'g2', 'T']:
                         output[n(name)] = filt_res[name]
 
     def _copy_psf_flux_results_byband(self, pres, output):
@@ -669,30 +669,29 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         copy the PSF flux fitting results from each band to the output record.
         """
 
-        if len(pres['byband'])==0:
+        if len(pres['byband']) == 0:
             return
 
-        config=self.cdict
-        for ifilt,filt in enumerate(config['filters']):
+        config = self.cdict
+        for ifilt, filt in enumerate(config['filters']):
             filt_res = pres['byband'][ifilt]
 
             if filt_res is not None:
-                n=self.get_psf_flux_namer(filt=filt)
+                n = self.get_psf_flux_namer(filt=filt)
 
                 output[n('flux_flags')] = filt_res['flags']
-                if filt_res['flags']==0:
+                if filt_res['flags'] == 0:
                     output[n('flux')] = filt_res['flux']
                     output[n('flux_err')] = filt_res['flux_err']
-
 
     def _copy_model_result(self, ores, output):
         """
         copy the model fitting result dict to the output record.
         """
 
-        config=self.cdict
+        config = self.cdict
 
-        mn=self.get_model_namer()
+        mn = self.get_model_namer()
         output[mn('flags')] = ores['flags']
 
         if 'nfev' in ores:
@@ -700,27 +699,27 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             # if it wasn't attempted
             output[mn('nfev')] = ores['nfev']
 
-        if ores['flags']==0:
-            for n in ['chi2per','dof','s2n']:
+        if ores['flags'] == 0:
+            for n in ['chi2per', 'dof', 's2n']:
                 output[mn(n)] = ores[n]
 
-            ni=[('row',0),('col',1),('g1',2),('g2',3),('T',4)]
-            if self.cdict['obj']['model'] in ['bd','bdf']:
-                ni += [('fracdev',5)]
-                flux_start=6
+            ni = [('row', 0), ('col', 1), ('g1', 2), ('g2', 3), ('T', 4)]
+            if self.cdict['obj']['model'] in ['bd', 'bdf']:
+                ni += [('fracdev', 5)]
+                flux_start = 6
             else:
-                flux_start=5
+                flux_start = 5
 
-            pars=ores['pars']
-            perr=ores['pars_err']
-            for n,i in ni:
+            pars = ores['pars']
+            perr = ores['pars_err']
+            for n, i in ni:
                 output[mn(n)] = pars[i]
                 output[mn(n+'_err')] = perr[i]
 
             for ifilt, filt in enumerate(config['filters']):
 
-                ind=flux_start+ifilt
-                mfn=self.get_model_flux_namer(filt)
+                ind = flux_start+ifilt
+                mfn = self.get_model_flux_namer(filt)
                 output[mfn('flux')] = pars[ind]
                 output[mfn('flux_err')] = perr[ind]
 
@@ -734,37 +733,34 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         get a namer for this output type
         """
-        config=self.cdict
-        model=config['obj']['model']
+        config = self.cdict
+        model = config['obj']['model']
         return Namer(front='ngmix_%s' % model)
-
 
     def get_psf_namer(self, filt=None):
         """
         get a namer for this output type
         """
-        front='ngmix_psf'
+        front = 'ngmix_psf'
         if filt is not None:
-            front='%s_%s' % (front,filt)
+            front = '%s_%s' % (front, filt)
         return Namer(front=front)
-
 
     def get_model_flux_namer(self, filt):
         """
         get a namer for this output type
         """
-        config=self.cdict
-        model=config['obj']['model']
-        front='ngmix_%s' % model
+        config = self.cdict
+        model = config['obj']['model']
+        front = 'ngmix_%s' % model
         return Namer(front=front, back=filt)
 
     def get_psf_flux_namer(self, filt):
         """
         get a namer for this output type
         """
-        front='ngmix_psf'
+        front = 'ngmix_psf'
         return Namer(front=front, back=filt)
-
 
     @property
     def prior(self):
@@ -775,9 +771,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             # this is temporary until I can figure out how to get
             # an existing seeded rng
 
-            conf=self.cdict
-            nband=len(conf['filters'])
-            model=conf['obj']['model']
+            conf = self.cdict
+            nband = len(conf['filters'])
             self._prior = priors.get_joint_prior(
                 conf['obj'],
                 nband,
@@ -785,7 +780,6 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             )
 
         return self._prior
-
 
 
 class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
@@ -812,91 +806,96 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         self.mapper.addMinimalSchema(SourceCatalog.Table.makeMinimalSchema(), True)
         schema = self.mapper.getOutputSchema()
 
-        config=self.cdict
+        config = self.cdict
 
-        model=config['obj']['model']
-        n=self.get_namer()
-        pn=self.get_psf_namer()
+        model = config['obj']['model']
+        n = self.get_namer()
+        pn = self.get_psf_namer()
 
         # generic ngmix fields
-        mtypes=[
-            (n('flags'),'overall flags for the processing',np.int32,''),
-            (n('stamp_size'),'size of postage stamp',np.int32,''),
-            (n('maskfrac'),'mean masked fraction',np.float32,''),
+        mtypes = [
+            (n('flags'), 'overall flags for the processing', np.int32, ''),
+            (n('stamp_size'), 'size of postage stamp', np.int32, ''),
+            (n('maskfrac'), 'mean masked fraction', np.float32, ''),
         ]
         for filt in config['filters']:
             mtypes += [
-                (n('maskfrac_%s' % filt),'masked fraction in %s filter' % filt,np.float32,''),
+                (n('maskfrac_%s' % filt), 'masked fraction in %s filter' % filt, np.float32, ''),
             ]
-
 
         # psf fitting related fields
         mtypes += [
-            (pn('flags'),'overall flags for the PSF processing',np.int32,''),
+            (pn('flags'), 'overall flags for the PSF processing', np.int32, ''),
 
             # mean over filters
-            (pn('g2_mean'),'mean over filters of component 2 of the PSF ellipticity',np.float64,''),
-            (pn('g1_mean'),'mean over filters of component 2 of the PSF ellipticity',np.float64,''),
-            (pn('T_mean'),'mean over filters <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+            (pn('g2_mean'), 'mean over filters of component 2 of the PSF ellipticity', np.float64, ''),
+            (pn('g1_mean'), 'mean over filters of component 2 of the PSF ellipticity', np.float64, ''),
+            (pn('T_mean'), 'mean over filters <x^2> + <y^2> for the gaussian mixture', np.float64,
+             'arcsec^2'),
         ]
 
         # PSF measurements by filter
         for filt in config['filters']:
-            pfn=self.get_psf_namer(filt=filt)
+            pfn = self.get_psf_namer(filt=filt)
             mtypes += [
                 (pfn('flags'), 'overall flags for PSF processing in %s filter' % filt, np.int32, ''),
-                (pfn('row'),'offset from canonical row position',np.float64,'arcsec'),
-                (pfn('col'),'offset from canonical col position',np.float64,'arcsec'),
+                (pfn('row'), 'offset from canonical row position', np.float64, 'arcsec'),
+                (pfn('col'), 'offset from canonical col position', np.float64, 'arcsec'),
                 (pfn('g1'), 'component 1 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
                 (pfn('g2'), 'component 2 of the PSF ellipticity in %s filter' % filt, np.float64, ''),
                 (pfn('T'), '<x^2> + <y^2> for the PSF in %s filter' % filt, np.float64, 'arcsec^2'),
             ]
 
         # PSF flux measurements, on the object, by filter
-        #for filt in config['filters']:
+        # for filt in config['filters']:
         #    pfn=self.get_psf_flux_namer(filt)
         #    mtypes += [
-        #        (pfn('flux_flags'),'flags for PSF template flux fitting in the %s filter' % filt,np.float64,''),
-        #        (pfn('flux'),'PSF template flux in the %s filter' % filt,np.float64,''),
-        #        (pfn('flux_err'),'error on PSF template flux in the %s filter' % filt,np.float64,''),
+        #        (pfn('flux_flags'),
+        #         'flags for PSF template flux fitting in the %s filter' %
+        #         filt,np.float64, ''),
+        #        (pfn('flux'),'PSF template flux in the %s filter' % filt,
+        #         np.float64, ''),
+        #        (pfn('flux_err'),
+        #         'error on PSF template flux in the %s filter' % filt,
+        #         np.float64, ''),
         #    ]
 
         # object fitting related fields
         for type in config['metacal']['types']:
-            mn=self.get_model_namer(type=type)
+            mn = self.get_model_namer(type=type)
             mtypes += [
-                (mn('flags'),'flags for model fit',np.int32,''),
-                (mn('nfev'),'number of function evaluations during fit',np.int32,''),
-                (mn('chi2per'),'chi^2 per degree of freedom',np.float64,''),
-                (mn('dof'),'number of degrees of freedom',np.int32,''),
+                (mn('flags'), 'flags for model fit', np.int32, ''),
+                (mn('nfev'), 'number of function evaluations during fit', np.int32, ''),
+                (mn('chi2per'), 'chi^2 per degree of freedom', np.float64, ''),
+                (mn('dof'), 'number of degrees of freedom', np.int32, ''),
 
-                (mn('s2n'),'S/N for the fit',np.float64,''),
+                (mn('s2n'), 'S/N for the fit', np.float64, ''),
 
-                (mn('row'),'offset from canonical row position',np.float64,'arcsec'),
-                (mn('row_err'),'error on offset from canonical row position',np.float64,'arcsec'),
-                (mn('col'),'offset from canonical col position',np.float64,'arcsec'),
-                (mn('col_err'),'error on offset from canonical col position',np.float64,'arcsec'),
-                (mn('g1'),'component 1 of the ellipticity',np.float64,''),
-                (mn('g1_err'),'error on component 1 of the ellipticity',np.float64,''),
-                (mn('g2'),'component 2 of the ellipticity',np.float64,''),
-                (mn('g2_err'),'error on component 2 of the ellipticity',np.float64,''),
-                (mn('T'),'<x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
-                (mn('T_err'),'error on <x^2> + <y^2> for the gaussian mixture',np.float64,'arcsec^2'),
+                (mn('row'), 'offset from canonical row position', np.float64, 'arcsec'),
+                (mn('row_err'), 'error on offset from canonical row position', np.float64, 'arcsec'),
+                (mn('col'), 'offset from canonical col position', np.float64, 'arcsec'),
+                (mn('col_err'), 'error on offset from canonical col position', np.float64, 'arcsec'),
+                (mn('g1'), 'component 1 of the ellipticity', np.float64, ''),
+                (mn('g1_err'), 'error on component 1 of the ellipticity', np.float64, ''),
+                (mn('g2'), 'component 2 of the ellipticity', np.float64, ''),
+                (mn('g2_err'), 'error on component 2 of the ellipticity', np.float64, ''),
+                (mn('T'), '<x^2> + <y^2> for the gaussian mixture', np.float64, 'arcsec^2'),
+                (mn('T_err'), 'error on <x^2> + <y^2> for the gaussian mixture', np.float64, 'arcsec^2'),
             ]
-            if model in ['bd','bdf']:
+            if model in ['bd', 'bdf']:
                 mtypes += [
-                    (mn('fracdev'),'fraction of light in the bulge',np.float64,''),
-                    (mn('fracdev_err'),'error on fraction of light in the bulge',np.float64,''),
+                    (mn('fracdev'), 'fraction of light in the bulge', np.float64, ''),
+                    (mn('fracdev_err'), 'error on fraction of light in the bulge', np.float64, ''),
                 ]
 
             for filt in config['filters']:
-                mfn=self.get_model_flux_namer(filt, type=type)
+                mfn = self.get_model_flux_namer(filt, type=type)
                 mtypes += [
-                    (mfn('flux'),'flux in the %s filter' % filt,np.float64,''),
-                    (mfn('flux_err'),'error on flux in the %s filter' % filt,np.float64,''),
+                    (mfn('flux'), 'flux in the %s filter' % filt, np.float64, ''),
+                    (mfn('flux_err'), 'error on flux in the %s filter' % filt, np.float64, ''),
                 ]
 
-        for name,doc,dtype,units in mtypes:
+        for name, doc, dtype, units in mtypes:
             schema.addField(
                 name,
                 type=dtype,
@@ -934,14 +933,14 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 
         flags = self._check_obs(mbobs, maskfrac_byband)
         if flags != 0:
-            res=self._get_default_result()
+            res = self._get_default_result()
             res['maskfrac'], res['maskfrac_byband'] = maskfrac, maskfrac_byband
             res['mcal_flags'] = flags
             return res
 
-        boot=self._get_bootstrapper(mbobs)
+        boot = self._get_bootstrapper(mbobs)
         boot.go()
-        res=boot.result
+        res = boot.result
         res['maskfrac'], res['maskfrac_byband'] = maskfrac, maskfrac_byband
         return res
 
@@ -967,7 +966,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         copy the result dict to the output record
         """
 
-        n=self.get_namer()
+        n = self.get_namer()
 
         if mbobs is None:
             output[n('flags')] = procflags.NO_ATTEMPT
@@ -975,17 +974,17 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             output[n('flags')] = res['mcal_flags']
 
             stamp_shape = mbobs[0][0].image.shape
-            stamp_size=stamp_shape[0]
+            stamp_size = stamp_shape[0]
 
             output[n('stamp_size')] = stamp_size
             output[n('maskfrac')] = res['maskfrac']
-            for ifilt,filt in enumerate(self.cdict['filters']):
+            for ifilt, filt in enumerate(self.cdict['filters']):
                 output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
 
             self._copy_psf_fit_result(res['noshear']['psf'], output)
             self._copy_psf_fit_results_byband(res['noshear']['psf'], output)
 
-            #self._copy_psf_flux_results_byband(res['psf_flux'], output)
+            # self._copy_psf_flux_results_byband(res['psf_flux'], output)
 
             self._copy_model_result(res, output)
 
@@ -995,69 +994,68 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         The statistics here are averaged over all bands
         """
 
-        n=self.get_psf_namer()
+        n = self.get_psf_namer()
         output[n('flags')] = pres['flags']
         if pres['flags'] == 0:
             output[n('g1_mean')] = pres['g1_mean']
             output[n('g2_mean')] = pres['g2_mean']
-            output[n('T_mean')]  = pres['T_mean']
+            output[n('T_mean')] = pres['T_mean']
 
     def _copy_psf_fit_results_byband(self, pres, output):
         """
         copy the PSF result from each band to the output record.
         """
 
-        if len(pres['byband'])==0:
+        if len(pres['byband']) == 0:
             return
 
-        config=self.cdict
-        for ifilt,filt in enumerate(config['filters']):
+        config = self.cdict
+        for ifilt, filt in enumerate(config['filters']):
             filt_res = pres['byband'][ifilt]
 
             if filt_res is not None:
-                n=self.get_psf_namer(filt=filt)
+                n = self.get_psf_namer(filt=filt)
 
                 output[n('flags')] = filt_res['flags']
                 if filt_res['flags'] == 0:
                     output[n('row')] = filt_res['pars'][0]
                     output[n('col')] = filt_res['pars'][1]
-                    if filt_res['flags']==0:
-                        for name in ['g1','g2','T']:
+                    if filt_res['flags'] == 0:
+                        for name in ['g1', 'g2', 'T']:
                             output[n(name)] = filt_res[name]
 
     def _copy_psf_flux_results_byband(self, pres, output):
         """
         copy the PSF flux fitting results from each band to the output record.
         """
-        if len(pres['byband'])==0:
+        if len(pres['byband']) == 0:
             return
 
-        config=self.cdict
-        for ifilt,filt in enumerate(config['filters']):
+        config = self.cdict
+        for ifilt, filt in enumerate(config['filters']):
             filt_res = pres['byband'][ifilt]
 
             if filt_res is not None:
-                n=self.get_psf_flux_namer(filt=filt)
+                n = self.get_psf_flux_namer(filt=filt)
 
                 output[n('flux_flags')] = filt_res['flags']
-                if filt_res['flags']==0:
+                if filt_res['flags'] == 0:
                     output[n('flux')] = filt_res['flux']
                     output[n('flux_err')] = filt_res['flux_err']
-
 
     def _copy_model_result(self, res, output):
         """
         copy the model fitting result dict to the output record.
         """
 
-        config=self.cdict
+        config = self.cdict
 
-        types=config['metacal']['types']
+        types = config['metacal']['types']
 
         for type in types:
-            ores=res[type]['obj']
+            ores = res[type]['obj']
 
-            mn=self.get_model_namer(type=type)
+            mn = self.get_model_namer(type=type)
             output[mn('flags')] = ores['flags']
 
             if 'nfev' in ores:
@@ -1065,27 +1063,27 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
                 # if it wasn't attempted
                 output[mn('nfev')] = ores['nfev']
 
-            if ores['flags']==0:
-                for n in ['chi2per','dof','s2n']:
+            if ores['flags'] == 0:
+                for n in ['chi2per', 'dof', 's2n']:
                     output[mn(n)] = ores[n]
 
-                ni=[('row',0),('col',1),('g1',2),('g2',3),('T',4)]
-                if self.cdict['obj']['model'] in ['bd','bdf']:
-                    ni += [('fracdev',5)]
-                    flux_start=6
+                ni = [('row', 0), ('col', 1), ('g1', 2), ('g2', 3), ('T', 4)]
+                if self.cdict['obj']['model'] in ['bd', 'bdf']:
+                    ni += [('fracdev', 5)]
+                    flux_start = 6
                 else:
-                    flux_start=5
+                    flux_start = 5
 
-                pars=ores['pars']
-                perr=ores['pars_err']
-                for n,i in ni:
+                pars = ores['pars']
+                perr = ores['pars_err']
+                for n, i in ni:
                     output[mn(n)] = pars[i]
                     output[mn(n+'_err')] = perr[i]
 
                 for ifilt, filt in enumerate(config['filters']):
 
-                    ind=flux_start+ifilt
-                    mfn=self.get_model_flux_namer(filt, type=type)
+                    ind = flux_start+ifilt
+                    mfn = self.get_model_flux_namer(filt, type=type)
                     output[mfn('flux')] = pars[ind]
                     output[mfn('flux_err')] = perr[ind]
 
@@ -1093,14 +1091,13 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         get a namer for this output type
         """
-        front='mcal'
 
-        back=None
+        back = None
         if type is not None:
-            if type=='noshear':
-                back=None
+            if type == 'noshear':
+                back = None
             else:
-                back=type
+                back = type
 
         return Namer(front='mcal', back=back)
 
@@ -1108,25 +1105,25 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         get a namer for this output type
         """
-        front='mcal_psf'
+        front = 'mcal_psf'
         if filt is not None:
-            front='%s_%s' % (front,filt)
+            front = '%s_%s' % (front, filt)
         return Namer(front=front)
 
     def get_model_namer(self, type=None):
         """
         get a namer for this output type
         """
-        config=self.cdict
-        model=config['obj']['model']
+        config = self.cdict
+        model = config['obj']['model']
 
-        front='mcal_%s' % model
+        front = 'mcal_%s' % model
 
         if type is not None:
-            if type=='noshear':
-                back=None
+            if type == 'noshear':
+                back = None
             else:
-                back=type
+                back = type
 
         return Namer(front=front, back=back)
 
@@ -1134,14 +1131,14 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         """
         get a namer for this output type
         """
-        config=self.cdict
-        model=config['obj']['model']
-        front='mcal_%s' % model
-        back=filt
+        config = self.cdict
+        model = config['obj']['model']
+        front = 'mcal_%s' % model
+        back = filt
 
         if type is not None:
-            if type!='noshear':
-                back='%s_%s' % (back, type)
+            if type != 'noshear':
+                back = '%s_%s' % (back, type)
 
         return Namer(front=front, back=back)
 
@@ -1150,9 +1147,8 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         get a namer for this output type
         """
         raise NotImplementedError('make work for metacal')
-        front='mcal_psf'
+        front = 'mcal_psf'
         return Namer(front=front, back=filt)
-
 
     @property
     def prior(self):
@@ -1163,9 +1159,8 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             # this is temporary until I can figure out how to get
             # an existing seeded rng
 
-            conf=self.cdict
-            nband=len(conf['filters'])
-            model=conf['obj']['model']
+            conf = self.cdict
+            nband = len(conf['filters'])
             self._prior = priors.get_joint_prior(
                 conf['obj'],
                 nband,
@@ -1178,6 +1173,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 # versions for deblended coadds
 # we need an entirely new class to write a different output file
 #
+
 
 class ProcessDeblendedCoaddsNGMixMaxTask(ProcessCoaddsNGMixMaxTask):
     """
@@ -1192,17 +1188,15 @@ class ProcessDeblendedCoaddsNGMixMaxTask(ProcessCoaddsNGMixMaxTask):
         make sure we are using the deblended images
         """
         check = (
-            replacers is not None
-            and
+            replacers is not None and
             self.cdict['useDeblends'] is True
         )
         assert check,\
             'You must set useDeblends=True and send noise replacers'
 
-        return super(ProcessDeblendedCoaddsNGMixMaxTask,self).run(
+        return super(ProcessDeblendedCoaddsNGMixMaxTask, self).run(
             images, ref, replacers, imageId,
         )
-
 
 
 class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
@@ -1218,27 +1212,27 @@ class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
         make sure we are using the deblended images
         """
         check = (
-            replacers is not None
-            and
+            replacers is not None and
             self.cdict['useDeblends'] is True
         )
         assert check,\
             'You must set useDeblends=True and send noise replacers'
 
-        return super(ProcessDeblendedCoaddsMetacalMaxTask,self).run(
+        return super(ProcessDeblendedCoaddsMetacalMaxTask, self).run(
             images, ref, replacers, imageId,
         )
 
-def make_image_plots(id, images, ncols = 1, titles = None, show=False):
+
+def make_image_plots(id, images, ncols=1, titles=None, show=False):
     """Display a list of images in a single figure with matplotlib.
-    
+
     Parameters
     ---------
     images: List of np.arrays compatible with plt.imshow.
-    
-    ncols (Default = 1): Number of columns in figure (number of rows is 
+
+    ncols (Default = 1): Number of columns in figure (number of rows is
                         set to np.ceil(n_images/float(ncols))).
-    
+
     titles: List of titles corresponding to each image. Must have
             the same length as titles.
     """
@@ -1251,11 +1245,11 @@ def make_image_plots(id, images, ncols = 1, titles = None, show=False):
     nrows = np.ceil(n_images/float(ncols))
 
     if titles is None:
-        titles = ['Image (%d)' % i for i in range(1,n_images + 1)]
+        titles = ['Image (%d)' % i for i in range(1, n_images + 1)]
 
-    dpi=96
-    width=20
-    fig = plt.figure(figsize=(width,width*nrows/ncols), dpi=dpi)
+    dpi = 96
+    width = 20
+    fig = plt.figure(figsize=(width, width*nrows/ncols), dpi=dpi)
 
     fig.suptitle(
         'id: %d' % id
@@ -1264,16 +1258,14 @@ def make_image_plots(id, images, ncols = 1, titles = None, show=False):
         a = fig.add_subplot(nrows, ncols, n + 1)
         if image.ndim == 2:
             plt.gray()
-        implt=plt.imshow(image, interpolation='nearest')
+        implt = plt.imshow(image, interpolation='nearest')
         divider = make_axes_locatable(a)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         fig.colorbar(implt, cax=cax)
         a.set_title(title)
 
-    #fig.set_size_inches(np.array(fig.get_size_inches()) * n_images)
+    # fig.set_size_inches(np.array(fig.get_size_inches()) * n_images)
     plt.tight_layout()
     if show:
         plt.show()
     return plt
-
-

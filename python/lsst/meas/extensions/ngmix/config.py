@@ -1,6 +1,7 @@
 from lsst.pex.config import Field, ListField, ConfigField, Config, ChoiceField
 from .processCoaddsTogether import ProcessCoaddsTogetherConfig
 
+
 class MetacalConfig(Config):
     """
     configuration of metacalibration
@@ -9,7 +10,7 @@ class MetacalConfig(Config):
     """
     types = ListField(
         dtype=str,
-        default=['noshear','1p','1m','2p','2m'],
+        default=['noshear', '1p', '1m', '2p', '2m'],
         optional=True,
         doc='types of images to create',
     )
@@ -20,6 +21,7 @@ class MetacalConfig(Config):
         doc=('Use round Gaussian for the PSF, based on a '
              'fit to the PSF image'),
     )
+
 
 class StampsConfig(Config):
     """
@@ -47,7 +49,6 @@ class StampsConfig(Config):
         doc='bits to ignore when calculating the background noise',
     )
 
-
     bits_to_null = ListField(
         dtype=str,
         default=[],
@@ -67,7 +68,6 @@ class StampsConfig(Config):
     )
 
 
-
 class LeastsqConfig(Config):
     """
     configuration for the likelihood fitting using scipy.leastsq
@@ -85,6 +85,7 @@ class LeastsqConfig(Config):
         doc='ftol paramter for scipy.leastsq',
     )
 
+
 class MaxConfig(Config):
     ntry = Field(
         dtype=int,
@@ -95,6 +96,7 @@ class MaxConfig(Config):
         doc="parameters for scipy.leastsq",
     )
 
+
 class CenPriorConfig(Config):
     """
     configuration of the prior for the center position
@@ -102,11 +104,12 @@ class CenPriorConfig(Config):
     type = ChoiceField(
         dtype=str,
         allowed={
-            "gauss2d":"2d gaussian",
+            "gauss2d": "2d gaussian",
         },
         doc="type of prior for center",
     )
     pars = ListField(dtype=float, doc="parameters for the center prior")
+
 
 class GPriorConfig(Config):
     """
@@ -115,11 +118,12 @@ class GPriorConfig(Config):
     type = ChoiceField(
         dtype=str,
         allowed={
-            "ba":"See Bernstein & Armstrong",
+            "ba": "See Bernstein & Armstrong",
         },
         doc="type of prior for ellipticity g",
     )
     pars = ListField(dtype=float, doc="parameters for the ellipticity prior")
+
 
 class TPriorConfig(Config):
     """
@@ -128,11 +132,12 @@ class TPriorConfig(Config):
     type = ChoiceField(
         dtype=str,
         allowed={
-            "two-sided-erf":"two-sided error function, smoother than a flat prior",
+            "two-sided-erf": "two-sided error function, smoother than a flat prior",
         },
         doc="type of prior for the square size T",
     )
     pars = ListField(dtype=float, doc="parameters for the T prior")
+
 
 class FluxPriorConfig(Config):
     """
@@ -141,11 +146,12 @@ class FluxPriorConfig(Config):
     type = ChoiceField(
         dtype=str,
         allowed={
-            "two-sided-erf":"two-sided error function, smoother than a flat prior",
+            "two-sided-erf": "two-sided error function, smoother than a flat prior",
         },
         doc="type of prior for the flux; gets repeated for multiple bands",
     )
     pars = ListField(dtype=float, doc="parameters for the flux prior")
+
 
 class FracdevPriorConfig(Config):
     """
@@ -155,7 +161,7 @@ class FracdevPriorConfig(Config):
     type = ChoiceField(
         dtype=str,
         allowed={
-            "gauss":"gaussian prior on fracdev",
+            "gauss": "gaussian prior on fracdev",
         },
         doc="type of prior for fracdev",
     )
@@ -164,6 +170,7 @@ class FracdevPriorConfig(Config):
         optional=True,
         doc="parameters for the fracdev prior",
     )
+
 
 class ObjectPriorsConfig(Config):
     """
@@ -178,9 +185,10 @@ class ObjectPriorsConfig(Config):
     fracdev = ConfigField(
         dtype=FracdevPriorConfig,
         default=None,
-        #optional=True,
+        # optional=True,
         doc="prior on fracdev",
     )
+
 
 class MaxFitConfigBase(Config):
     """
@@ -191,6 +199,7 @@ class MaxFitConfigBase(Config):
         doc="parameters for maximum likelihood fitting with scipy.leastsq",
     )
 
+
 class PSFMaxFitConfig(MaxFitConfigBase):
     """
     PSF fitting configuration using maximum likelihood
@@ -200,9 +209,9 @@ class PSFMaxFitConfig(MaxFitConfigBase):
     model = ChoiceField(
         dtype=str,
         allowed={
-            "gauss":"gaussian model",
-            "coellip2":"coelliptical 2 gauss model",
-            "coellip3":"coelliptical 3 gauss model",
+            "gauss": "gaussian model",
+            "coellip2": "coelliptical 2 gauss model",
+            "coellip3": "coelliptical 3 gauss model",
         },
         doc="The model to fit with ngmix",
     )
@@ -221,12 +230,12 @@ class ObjectMaxFitConfig(MaxFitConfigBase):
     model = ChoiceField(
         dtype=str,
         allowed={
-            "gauss":"gaussian model",
-            "exp":"exponential model",
-            "dev":"dev model",
+            "gauss": "gaussian model",
+            "exp": "exponential model",
+            "dev": "dev model",
             # bd and bdf are the same
-            "bd":"bulge+disk model with fixed size ratio",
-            "bdf":"bulge+disk model with fixed size ratio",
+            "bd": "bulge+disk model with fixed size ratio",
+            "bdf": "bulge+disk model with fixed size ratio",
         },
         doc="The model to fit with ngmix",
     )
@@ -264,7 +273,7 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
         optional=True,
         doc='write some image plots',
     )
-    plot_prefix= Field(
+    plot_prefix = Field(
         dtype=str,
         default=None,
         optional=True,
@@ -272,19 +281,19 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     )
 
 
-
 class ProcessCoaddsNGMixMaxConfig(BasicProcessConfig):
     """
     fit the object and PSF using maximum likelihood
     """
     psf = ConfigField(dtype=PSFMaxFitConfig, doc='psf fitting config')
-    obj = ConfigField(dtype=ObjectMaxFitConfig,doc="object fitting config")
+    obj = ConfigField(dtype=ObjectMaxFitConfig, doc="object fitting config")
 
     def setDefaults(self):
         """
         prefix for the output file
         """
         self.output.name = "deepCoadd_ngmix"
+
 
 class ProcessDeblendedCoaddsNGMixMaxConfig(ProcessCoaddsNGMixMaxConfig):
     """
@@ -303,14 +312,15 @@ class ProcessCoaddsMetacalMaxConfig(BasicProcessConfig):
     perform metacal using maximum likelihood
     """
     psf = ConfigField(dtype=PSFMaxFitConfig, doc='psf fitting config')
-    obj = ConfigField(dtype=ObjectMaxFitConfig,doc='object fitting config')
-    metacal = ConfigField(dtype=MetacalConfig,doc='metacal config')
+    obj = ConfigField(dtype=ObjectMaxFitConfig, doc='object fitting config')
+    metacal = ConfigField(dtype=MetacalConfig, doc='metacal config')
 
     def setDefaults(self):
         """
         prefix for the output file
         """
         self.output.name = "deepCoadd_mcalmax"
+
 
 class ProcessDeblendedCoaddsMetacalMaxConfig(ProcessCoaddsMetacalMaxConfig):
     """
@@ -322,7 +332,3 @@ class ProcessDeblendedCoaddsMetacalMaxConfig(ProcessCoaddsMetacalMaxConfig):
         prefix for the output file
         """
         self.output.name = "deepCoadd_mcalmax_deblended"
-
-
-
-
