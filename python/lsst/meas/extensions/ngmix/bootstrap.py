@@ -414,6 +414,8 @@ class MetacalMaxBootstrapper(object):
         if boot.result['psf']['flags'] != 0:
             logger.debug('cannot do symmetrize psf due to psf fitting failures')
             # TODO need finer grained flag
+            raise RuntimeError("Code path not supported")
+            res = dict()
             res['mcal_flags'] = procflags.METACAL_PSF_FAILURE
             return res
 
