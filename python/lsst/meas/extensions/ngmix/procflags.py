@@ -18,10 +18,10 @@ OBJ_FIT_FAILURE = 2**5
 
 
 # failure of PSF fitting at some point in metacal
-METACAL_PSF_FAILURE = 2**0
+METACAL_PSF_FAILURE = 2**6
 
 # failure of PSF flux fitting at some point in metacal
-METACAL_PSF_FLUX_FAILURE = 2**1
+METACAL_PSF_FLUX_FAILURE = 2**7
 
 # failure of object fitting at some point in metacal
-METACAL_OBJ_FAILURE = 2**2
+METACAL_OBJ_FAILURE = 2**8
