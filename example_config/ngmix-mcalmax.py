@@ -88,7 +88,7 @@ config.stamps.bits_to_null = [
 # we do not process objects for which these bits are set
 config.stamps.bits_to_cut = [
     'BRIGHT_OBJECT',
-    'INEXACT_PSF',
+    # 'INEXACT_PSF',
 ]
 
 # we will be nulling the weight map for some bits, don't allow more
