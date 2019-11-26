@@ -25,7 +25,6 @@
 from lsst.afw.table import SourceCatalog
 from lsst.pipe.base import (
     CmdLineTask, ArgumentParser,
-    PipelineTask, InputDatasetField, OutputDatasetField, QuantumConfig,
 )
 from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
 from lsst.pex.config import Config, ConfigField, Field
@@ -38,42 +37,31 @@ __all__ = ("ProcessCoaddsTogetherConfig", "ProcessCoaddsTogetherTask")
 
 
 class ProcessCoaddsTogetherConfig(Config):
-    images = InputDatasetField(
+    images = Field(
         doc="Coadd image DatasetType used as input (one for each band)",
-        name="deepCoadd_calexp",
-        scalar=False,
-        storageClass="Exposure",
-        dimensions=("Tract", "Patch", "AbstractFilter", "SkyMap")
+        default="deepCoadd_calexp",
+        dtype=str,
     )
-    ref = InputDatasetField(
+    ref = Field(
         doc="Coadd catalog DatasetType reference input (one instance across all bands).",
-        name="deepCoadd_ref",
-        scalar=True,
-        storageClass="SourceCatalog",
-        dimensions=("Tract", "Patch", "SkyMap")
+        default="deepCoadd_ref",
+        dtype=str,
     )
-    output = OutputDatasetField(
+    output = Field(
         doc="Output catalog DatasetType (one instance across all bands)",
-        name=None,   # Must be overridden by derived classes to a DatasetType known to obs_base
-        scalar=True,
-        storageClass="SourceCatalog",
-        dimensions=("Tract", "Patch", "SkyMap")
-    )
-    quantum = QuantumConfig(
-        dimensions=("Tract", "Patch", "SkyMap")
+        default=None,   # Must be overridden by derived classes to a DatasetType known to obs_base
+        dtype=str,
     )
     deblendReplacer = ConfigField(
         dtype=NoiseReplacerConfig,
         doc=("Details for how to replace neighbors with noise when applying deblender outputs. "
              "Ignored if `useDeblending == False`.")
     )
-    deblendCatalog = InputDatasetField(
+    deblendCatalog = Field(
         doc=("Catalog DatasetType from which to extract deblended [Heavy]Footprints (one for each band). "
              "Ignored if 'useDeblending == False'."),
-        name="deepCoadd_meas",
-        scalar=False,
-        storageClass="SourceCatalog",
-        dimensions=("Tract", "Patch", "AbstractFilter", "SkyMap")
+        default="deepCoadd_meas",
+        dtype=str,
     )
     useDeblends = Field(
         dtype=bool,
@@ -83,7 +71,7 @@ class ProcessCoaddsTogetherConfig(Config):
     )
 
 
-class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
+class ProcessCoaddsTogetherTask(CmdLineTask):
     _DefaultName = "processCoaddsTogether"
     ConfigClass = ProcessCoaddsTogetherConfig
 
@@ -99,7 +87,7 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
     def _makeArgumentParser(cls):
         # Customize argument parsing for CmdLineTask.
         parser = ArgumentParser(name=cls._DefaultName)
-        # This should be config.images.name, but there's no way to pass that
+        # This should be config.images, but there's no way to pass that
         # information in here in Gen2.
         datasetType = "deepCoadd_calexp"
         parser.add_id_argument("--id", datasetType,
@@ -116,7 +104,7 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
                 if refSchema is None:
                     refSchema = SourceCatalog.Table.makeMinimalSchema()
             else:
-                refSchema = butler.get(self.config.ref.name + "_schema").schema
+                refSchema = butler.get(self.config.ref + "_schema").schema
         self.schema = self.defineSchema(refSchema)
 
     def getInitOutputDatasets(self):
@@ -125,7 +113,7 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
 
     def getSchemaCatalogs(self):
         # Customize schema dataset retrieval for CmdLineTask
-        return {self.config.output.name: SourceCatalog(self.schema)}
+        return {self.config.output: SourceCatalog(self.schema)}
 
     def _getConfigName(self):
         # Config writing with CmdLineTask is disabled for this class.
@@ -152,14 +140,14 @@ class ProcessCoaddsTogetherTask(CmdLineTask, PipelineTask):
         imageId = butler.get("deepMergedCoaddId", dataId=mergedDataId)
         for patchRef in patchRefList:
             filt = getShortFilterName(patchRef.dataId["filter"])
-            images[filt] = patchRef.get(self.config.images.name)
+            images[filt] = patchRef.get(self.config.images)
             if self.config.useDeblends:
-                fpCat = patchRef.get(self.config.deblendCatalog.name)
+                fpCat = patchRef.get(self.config.deblendCatalog)
                 footprints = {rec.getId(): (rec.getParent(), rec.getFootprint()) for rec in fpCat}
                 replacers[filt] = NoiseReplacer(self.config.deblendReplacer, exposure=images[filt],
                                                 footprints=footprints, exposureId=imageId)
         results = self.run(images, ref, imageId=imageId, replacers=replacers)
-        butler.put(results.output, self.config.output.name, dataId=mergedDataId)
+        butler.put(results.output, self.config.output, dataId=mergedDataId)
 
     def defineSchema(self, refSchema):
         """Return the Schema for the output catalog.

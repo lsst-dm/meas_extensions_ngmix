@@ -292,7 +292,7 @@ class ProcessCoaddsNGMixMaxConfig(BasicProcessConfig):
         """
         prefix for the output file
         """
-        self.output.name = "deepCoadd_ngmix"
+        self.output = "deepCoadd_ngmix"
 
 
 class ProcessDeblendedCoaddsNGMixMaxConfig(ProcessCoaddsNGMixMaxConfig):
@@ -304,7 +304,7 @@ class ProcessDeblendedCoaddsNGMixMaxConfig(ProcessCoaddsNGMixMaxConfig):
         """
         prefix for the output file
         """
-        self.output.name = "deepCoadd_ngmix_deblended"
+        self.output = "deepCoadd_ngmix_deblended"
 
 
 class ProcessCoaddsMetacalMaxConfig(BasicProcessConfig):
@@ -319,7 +319,7 @@ class ProcessCoaddsMetacalMaxConfig(BasicProcessConfig):
         """
         prefix for the output file
         """
-        self.output.name = "deepCoadd_mcalmax"
+        self.output = "deepCoadd_mcalmax"
 
 
 class ProcessDeblendedCoaddsMetacalMaxConfig(ProcessCoaddsMetacalMaxConfig):
@@ -331,4 +331,4 @@ class ProcessDeblendedCoaddsMetacalMaxConfig(ProcessCoaddsMetacalMaxConfig):
         """
         prefix for the output file
         """
-        self.output.name = "deepCoadd_mcalmax_deblended"
+        self.output = "deepCoadd_mcalmax_deblended"
