@@ -109,7 +109,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
             self._cdict = self.config.toDict()
         return self._cdict
 
-    def run(self, images, ref, replacers, imageId):
+    def run(self, images, ref, replacers, imageId, butler=None, kwargs_butler=None):
         """Process coadds from all bands for a single patch.
 
         This method should not add or modify self.
@@ -134,7 +134,11 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         imageId : `int`
             Unique ID for this unit of data.  Should be used (possibly
             indirectly) to seed random numbers.
-
+        butler : `lsst.daf.persistence.Butler`
+            Butler to output incremental results to if enabled.
+        kwargs_butler : `dict`
+            Additional keyword arguments to pass to `butler`.put() for
+            incremental output; default {}.
         Returns
         -------
         results : `lsst.pipe.base.Struct`
@@ -165,6 +169,11 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         # Write log every numSourcesLog steps
         log = self.config.numSourcesLog > 0
 
+        # Write catalog every numSourcesWrite steps if
+        output_incremental = butler is not None and (self.config.numSourcesWrite > 0)
+        if output_incremental and kwargs_butler is None:
+            kwargs_butler = {}
+
         index_range = self.get_index_range(output)
 
         for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
@@ -173,6 +182,10 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
             if log and ((n % self.config.numSourcesLog) == 0):
                 self.log.info('index: %06d/%06d' % (n, index_range[1]))
+
+            if output_incremental and ((n % self.config.numSourcesWrite) == 0):
+                butler.put(output, self.config.output, **kwargs_butler)
+
             nproc += 1
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
@@ -1186,7 +1199,7 @@ class ProcessDeblendedCoaddsNGMixMaxTask(ProcessCoaddsNGMixMaxTask):
     _DefaultName = "processDeblendedCoaddsNGMixMax"
     ConfigClass = ProcessDeblendedCoaddsNGMixMaxConfig
 
-    def run(self, images, ref, replacers, imageId):
+    def run(self, images, ref, replacers, imageId, butler=None, kwargs_butler=None):
         """
         make sure we are using the deblended images
         """
@@ -1198,7 +1211,7 @@ class ProcessDeblendedCoaddsNGMixMaxTask(ProcessCoaddsNGMixMaxTask):
             'You must set useDeblends=True and send noise replacers'
 
         return super(ProcessDeblendedCoaddsNGMixMaxTask, self).run(
-            images, ref, replacers, imageId,
+            images, ref, replacers, imageId, butler=butler, kwargs_butler=kwargs_butler,
         )
 
 
@@ -1210,7 +1223,7 @@ class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
     _DefaultName = "processDeblendedCoaddsMetacalMax"
     ConfigClass = ProcessDeblendedCoaddsMetacalMaxConfig
 
-    def run(self, images, ref, replacers, imageId):
+    def run(self, images, ref, replacers, imageId, butler=None, kwargs_butler=None):
         """
         make sure we are using the deblended images
         """
@@ -1222,7 +1235,7 @@ class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
             'You must set useDeblends=True and send noise replacers'
 
         return super(ProcessDeblendedCoaddsMetacalMaxTask, self).run(
-            images, ref, replacers, imageId,
+            images, ref, replacers, imageId, butler=butler, kwargs_butler=kwargs_butler,
         )
 
 
