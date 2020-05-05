@@ -52,6 +52,7 @@ class ProcessCoaddsTogetherConfig(Config):
         default=None,   # Must be overridden by derived classes to a DatasetType known to obs_base
         dtype=str,
     )
+    numSourcesLog = Field(doc='Number of sources to fit before logging status', default=100, dtype=int)
     deblendReplacer = ConfigField(
         dtype=NoiseReplacerConfig,
         doc=("Details for how to replace neighbors with noise when applying deblender outputs. "

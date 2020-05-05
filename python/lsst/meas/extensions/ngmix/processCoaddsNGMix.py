@@ -162,13 +162,16 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         # Add mostly-empty rows to it, copying IDs from the ref catalog.
         output.extend(ref, mapper=self.mapper)
 
+        # Write log every numSourcesLog steps
+        log = self.config.numSourcesLog > 0
+
         index_range = self.get_index_range(output)
 
         for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
             if n < index_range[0] or n > index_range[1]:
                 continue
 
-            if (n % 100) == 0:
+            if log and ((n % self.config.numSourcesLog) == 0):
                 self.log.info('index: %06d/%06d' % (n, index_range[1]))
             nproc += 1
 
