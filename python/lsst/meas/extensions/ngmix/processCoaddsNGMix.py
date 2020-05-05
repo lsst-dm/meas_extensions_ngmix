@@ -64,7 +64,7 @@ import time
 import numpy as np
 import ngmix
 from lsst.afw.table import SourceCatalog, SchemaMapper
-from lsst.pipe.base import Struct
+import lsst.pipe.base as pipeBase
 
 from .processCoaddsTogether import ProcessCoaddsTogetherTask
 from . import util
@@ -232,7 +232,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         self.log.info('time: %g min' % (tm/60.0))
         self.log.info('time per: %g sec' % (tm/nproc))
 
-        return Struct(output=output)
+        return pipeBase.Struct(output=output)
 
     def _check_obs(self, mbobs, maskfrac_byband):
         """
@@ -476,6 +476,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             (n('flags'), 'overall flags for the processing', np.int32, ''),
             (n('stamp_size'), 'size of postage stamp', np.int32, ''),
             (n('maskfrac'), 'mean masked fraction', np.float32, ''),
+            (n('time'), 'runtime', np.float64, 's'),
         ]
         for filt in config['filters']:
             mtypes += [
@@ -558,6 +559,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         return schema
 
+    @pipeBase.timeMethod
     def _process_observations(self, id, mbobs):
         """
         process the input observations
@@ -625,7 +627,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
 
         n = self.get_namer()
-
+        output[n('time')] = (self.metadata["_process_observationsEndCpuTime"] -
+                             self.metadata["_process_observationsStartCpuTime"])
         if mbobs is None:
             output[n('flags')] = procflags.NO_ATTEMPT
         else:
@@ -921,6 +924,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 
         return schema
 
+    @pipeBase.timeMethod
     def _process_observations(self, id, mbobs):
         """
         process the input observations
