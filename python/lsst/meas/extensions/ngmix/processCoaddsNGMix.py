@@ -627,8 +627,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
 
         n = self.get_namer()
-        output[n('time')] = (self.metadata["_process_observationsEndCpuTime"] -
-                             self.metadata["_process_observationsStartCpuTime"])
+        output[n('time')] = (self.metadata["_process_observationsEndCpuTime"]
+                             - self.metadata["_process_observationsStartCpuTime"])
         if mbobs is None:
             output[n('flags')] = procflags.NO_ATTEMPT
         else:
@@ -1208,8 +1208,8 @@ class ProcessDeblendedCoaddsNGMixMaxTask(ProcessCoaddsNGMixMaxTask):
         make sure we are using the deblended images
         """
         check = (
-            replacers is not None and
-            self.cdict['useDeblends'] is True
+            replacers is not None
+            and self.cdict['useDeblends'] is True
         )
         assert check,\
             'You must set useDeblends=True and send noise replacers'
@@ -1232,8 +1232,8 @@ class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
         make sure we are using the deblended images
         """
         check = (
-            replacers is not None and
-            self.cdict['useDeblends'] is True
+            replacers is not None
+            and self.cdict['useDeblends'] is True
         )
         assert check,\
             'You must set useDeblends=True and send noise replacers'
