@@ -52,6 +52,8 @@ class ProcessCoaddsTogetherConfig(Config):
         default=None,   # Must be overridden by derived classes to a DatasetType known to obs_base
         dtype=str,
     )
+    numSourcesLog = Field(doc='Number of sources to fit before logging status', default=100, dtype=int)
+    numSourcesWrite = Field(doc='Number of sources to fit before incremental writing', default=100, dtype=int)
     deblendReplacer = ConfigField(
         dtype=NoiseReplacerConfig,
         doc=("Details for how to replace neighbors with noise when applying deblender outputs. "
@@ -146,7 +148,10 @@ class ProcessCoaddsTogetherTask(CmdLineTask):
                 footprints = {rec.getId(): (rec.getParent(), rec.getFootprint()) for rec in fpCat}
                 replacers[filt] = NoiseReplacer(self.config.deblendReplacer, exposure=images[filt],
                                                 footprints=footprints, exposureId=imageId)
-        results = self.run(images, ref, imageId=imageId, replacers=replacers)
+        outputIncremental = self.config.numSourcesWrite > 0
+        results = self.run(
+            images, ref, imageId=imageId, replacers=replacers, butler=butler if outputIncremental else None,
+            kwargs_butler={'dataId': mergedDataId} if outputIncremental else {})
         butler.put(results.output, self.config.output, dataId=mergedDataId)
 
     def defineSchema(self, refSchema):
@@ -166,7 +171,7 @@ class ProcessCoaddsTogetherTask(CmdLineTask):
         """
         raise NotImplementedError("Must be implemented by derived classes.")
 
-    def run(self, images, ref):
+    def run(self, images, ref, imageId, replacers, butler=None, kwargs_butler=None):
         """Process coadds from all bands for a single patch.
 
         This method should not add or modify self.

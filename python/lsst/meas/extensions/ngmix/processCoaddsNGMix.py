@@ -64,7 +64,7 @@ import time
 import numpy as np
 import ngmix
 from lsst.afw.table import SourceCatalog, SchemaMapper
-from lsst.pipe.base import Struct
+import lsst.pipe.base as pipeBase
 
 from .processCoaddsTogether import ProcessCoaddsTogetherTask
 from . import util
@@ -109,7 +109,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
             self._cdict = self.config.toDict()
         return self._cdict
 
-    def run(self, images, ref, replacers, imageId):
+    def run(self, images, ref, replacers, imageId, butler=None, kwargs_butler=None):
         """Process coadds from all bands for a single patch.
 
         This method should not add or modify self.
@@ -134,7 +134,11 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         imageId : `int`
             Unique ID for this unit of data.  Should be used (possibly
             indirectly) to seed random numbers.
-
+        butler : `lsst.daf.persistence.Butler`
+            Butler to output incremental results to if enabled.
+        kwargs_butler : `dict`
+            Additional keyword arguments to pass to `butler`.put() for
+            incremental output; default {}.
         Returns
         -------
         results : `lsst.pipe.base.Struct`
@@ -162,14 +166,26 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         # Add mostly-empty rows to it, copying IDs from the ref catalog.
         output.extend(ref, mapper=self.mapper)
 
+        # Write log every numSourcesLog steps
+        log = self.config.numSourcesLog > 0
+
+        # Write catalog every numSourcesWrite steps if
+        output_incremental = butler is not None and (self.config.numSourcesWrite > 0)
+        if output_incremental and kwargs_butler is None:
+            kwargs_butler = {}
+
         index_range = self.get_index_range(output)
 
         for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
             if n < index_range[0] or n > index_range[1]:
                 continue
 
-            if (n % 100) == 0:
+            if log and ((n % self.config.numSourcesLog) == 0):
                 self.log.info('index: %06d/%06d' % (n, index_range[1]))
+
+            if output_incremental and ((n % self.config.numSourcesWrite) == 0):
+                butler.put(output, self.config.output, **kwargs_butler)
+
             nproc += 1
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
@@ -216,7 +232,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         self.log.info('time: %g min' % (tm/60.0))
         self.log.info('time per: %g sec' % (tm/nproc))
 
-        return Struct(output=output)
+        return pipeBase.Struct(output=output)
 
     def _check_obs(self, mbobs, maskfrac_byband):
         """
@@ -460,6 +476,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             (n('flags'), 'overall flags for the processing', np.int32, ''),
             (n('stamp_size'), 'size of postage stamp', np.int32, ''),
             (n('maskfrac'), 'mean masked fraction', np.float32, ''),
+            (n('time'), 'runtime', np.float64, 's'),
         ]
         for filt in config['filters']:
             mtypes += [
@@ -542,6 +559,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
         return schema
 
+    @pipeBase.timeMethod
     def _process_observations(self, id, mbobs):
         """
         process the input observations
@@ -609,7 +627,8 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         """
 
         n = self.get_namer()
-
+        output[n('time')] = (self.metadata["_process_observationsEndCpuTime"]
+                             - self.metadata["_process_observationsStartCpuTime"])
         if mbobs is None:
             output[n('flags')] = procflags.NO_ATTEMPT
         else:
@@ -905,6 +924,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 
         return schema
 
+    @pipeBase.timeMethod
     def _process_observations(self, id, mbobs):
         """
         process the input observations
@@ -1183,19 +1203,19 @@ class ProcessDeblendedCoaddsNGMixMaxTask(ProcessCoaddsNGMixMaxTask):
     _DefaultName = "processDeblendedCoaddsNGMixMax"
     ConfigClass = ProcessDeblendedCoaddsNGMixMaxConfig
 
-    def run(self, images, ref, replacers, imageId):
+    def run(self, images, ref, replacers, imageId, butler=None, kwargs_butler=None):
         """
         make sure we are using the deblended images
         """
         check = (
-            replacers is not None and
-            self.cdict['useDeblends'] is True
+            replacers is not None
+            and self.cdict['useDeblends'] is True
         )
         assert check,\
             'You must set useDeblends=True and send noise replacers'
 
         return super(ProcessDeblendedCoaddsNGMixMaxTask, self).run(
-            images, ref, replacers, imageId,
+            images, ref, replacers, imageId, butler=butler, kwargs_butler=kwargs_butler,
         )
 
 
@@ -1207,19 +1227,19 @@ class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
     _DefaultName = "processDeblendedCoaddsMetacalMax"
     ConfigClass = ProcessDeblendedCoaddsMetacalMaxConfig
 
-    def run(self, images, ref, replacers, imageId):
+    def run(self, images, ref, replacers, imageId, butler=None, kwargs_butler=None):
         """
         make sure we are using the deblended images
         """
         check = (
-            replacers is not None and
-            self.cdict['useDeblends'] is True
+            replacers is not None
+            and self.cdict['useDeblends'] is True
         )
         assert check,\
             'You must set useDeblends=True and send noise replacers'
 
         return super(ProcessDeblendedCoaddsMetacalMaxTask, self).run(
-            images, ref, replacers, imageId,
+            images, ref, replacers, imageId, butler=butler, kwargs_butler=kwargs_butler,
         )
 
 

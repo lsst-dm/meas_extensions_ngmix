@@ -277,8 +277,8 @@ class MBObsExtractor(object):
         bits_to_ignore = util.get_ored_bits(maskobj, bitnames_to_ignore)
 
         wuse = np.where(
-            (var_image > 0) &
-            ((mask & bits_to_ignore) == 0)
+            (var_image > 0)
+            & ((mask & bits_to_ignore) == 0)
         )
 
         if wuse[0].size > 0:
