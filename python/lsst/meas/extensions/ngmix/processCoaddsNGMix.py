@@ -338,7 +338,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
                 if start < 0 or start > ntot-1:
                     raise ValueError(
                         'requested start index %d out '
-                        'of bounds [%d,%d]' % (start, ntot-1)
+                        'of bounds [%d,%d]' % (start, 0, ntot-1)
                     )
 
             if num is None:
@@ -1259,7 +1259,7 @@ def make_image_plots(id, images, ncols=1, titles=None, show=False):
     import matplotlib.pyplot as plt
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-    assert((titles is None)or (len(images) == len(titles)))
+    assert((titles is None) or (len(images) == len(titles)))
 
     n_images = len(images)
     nrows = np.ceil(n_images/float(ncols))
