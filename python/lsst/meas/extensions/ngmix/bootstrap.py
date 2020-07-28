@@ -378,6 +378,9 @@ class MetacalMaxBootstrapper(object):
         except galsim.GalSimValueError:
             res['mcal_flags'] = procflags.IMAGE_FLAGS
             return
+        except ngmix.GMixRangeError:
+            res['mcal_flags'] = procflags.PSF_FIT_FAILURE
+            return
 
         for type, tmbobs in mdict.items():
             self._do_one_metacal(tmbobs, type)
