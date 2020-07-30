@@ -8,7 +8,8 @@ Also we don't plan to support multi-epoch fitting so these can be simplified
 import lsst.log
 import numpy as np
 import ngmix
-import galsim
+from ngmix.gexceptions import GMixRangeError, BootPSFFailure
+from galsim import GalSimValueError
 from . import procflags
 
 from copy import deepcopy
@@ -375,10 +376,13 @@ class MetacalMaxBootstrapper(object):
                 self.mbobs,
                 **config['metacal'],
             )
-        except galsim.GalSimValueError:
+        except GalSimValueError:
             res['mcal_flags'] = procflags.IMAGE_FLAGS
             return
-        except ngmix.GMixRangeError:
+        except GMixRangeError:
+            res['mcal_flags'] = procflags.PSF_FIT_FAILURE
+            return
+        except BootPSFFailure:
             res['mcal_flags'] = procflags.PSF_FIT_FAILURE
             return
 
