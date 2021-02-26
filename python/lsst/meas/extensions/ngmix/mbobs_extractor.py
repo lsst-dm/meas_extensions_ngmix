@@ -58,7 +58,7 @@ class MBObsExtractor(object):
 
         mbobs = ngmix.MultiBandObsList()
 
-        for filt in self.config['filters']:
+        for filt in self.config['bands_fit']:
             # TODO: run noise replacers here
 
             imf = self.images[filt]
@@ -307,7 +307,7 @@ class MBObsExtractor(object):
            appropriate exception.
         """
         xy0 = None
-        for filt in self.config['filters']:
+        for filt in self.config['bands_fit']:
             if filt not in self.images:
                 raise MBObsMissingDataError('band missing: %s' % filt)
 

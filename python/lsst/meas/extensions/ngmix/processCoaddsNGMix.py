@@ -263,7 +263,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
                 w = np.where((obs.bmask & bits_to_cut) != 0)
                 if w[0].size > 0:
 
-                    band = self.cdict['filters'][iband]
+                    band = self.cdict['bands_fit'][iband]
 
                     self.log.debug(
                         'setting IMAGE_FLAGS '
@@ -288,7 +288,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
         for iband, frac in enumerate(maskfrac_byband):
             if frac > mzfrac:
-                band = self.cdict['filters'][iband]
+                band = self.cdict['bands_fit'][iband]
                 self.log.debug(
                     'setting HIGH_MASKFRAC in filter %s '
                     'because zero weight frac '
@@ -410,7 +410,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         self._rng = np.random.RandomState(seed)
 
     def _make_plots(self, id, mbobs):
-        filters = self.cdict['filters']
+        filters = self.cdict['bands_fit']
 
         imlist = [o[0].image for o in mbobs]
         titles = [f for f in filters]
@@ -478,7 +478,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             (n('maskfrac'), 'mean masked fraction', np.float32, ''),
             (n('time'), 'runtime', np.float64, 's'),
         ]
-        for filt in config['filters']:
+        for filt in config['bands_fit']:
             mtypes += [
                 (n('maskfrac_%s' % filt), 'masked fraction in %s filter' % filt, np.float32, ''),
             ]
@@ -495,7 +495,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
         ]
 
         # PSF measurements by filter
-        for filt in config['filters']:
+        for filt in config['bands_fit']:
             pfn = self.get_psf_namer(filt=filt)
             mtypes += [
                 (pfn('flags'), 'overall flags for PSF processing in %s filter' % filt, np.int32, ''),
@@ -507,7 +507,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             ]
 
         # PSF flux measurements, on the object, by filter
-        for filt in config['filters']:
+        for filt in config['bands_fit']:
             pfn = self.get_psf_flux_namer(filt)
             mtypes += [
                 (pfn('flux_flags'), 'flags for PSF template flux fitting in the %s filter' % filt,
@@ -542,7 +542,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
                 (mn('fracdev_err'), 'error on fraction of light in the bulge', np.float64, ''),
             ]
 
-        for filt in config['filters']:
+        for filt in config['bands_fit']:
             mfn = self.get_model_flux_namer(filt)
             mtypes += [
                 (mfn('flux'), 'flux in the %s filter' % filt, np.float64, ''),
@@ -639,7 +639,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
 
             output[n('stamp_size')] = stamp_size
             output[n('maskfrac')] = res['maskfrac']
-            for ifilt, filt in enumerate(self.cdict['filters']):
+            for ifilt, filt in enumerate(self.cdict['bands_fit']):
                 output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
 
             self._copy_psf_fit_result(res['psf'], output)
@@ -670,7 +670,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             return
 
         config = self.cdict
-        for ifilt, filt in enumerate(config['filters']):
+        for ifilt, filt in enumerate(config['bands_fit']):
             filt_res = pres['byband'][ifilt]
 
             if filt_res is not None:
@@ -692,7 +692,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             return
 
         config = self.cdict
-        for ifilt, filt in enumerate(config['filters']):
+        for ifilt, filt in enumerate(config['bands_fit']):
             filt_res = pres['byband'][ifilt]
 
             if filt_res is not None:
@@ -735,7 +735,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
                 output[mn(n)] = pars[i]
                 output[mn(n+'_err')] = perr[i]
 
-            for ifilt, filt in enumerate(config['filters']):
+            for ifilt, filt in enumerate(config['bands_fit']):
 
                 ind = flux_start+ifilt
                 mfn = self.get_model_flux_namer(filt)
@@ -791,7 +791,7 @@ class ProcessCoaddsNGMixMaxTask(ProcessCoaddsNGMixBaseTask):
             # an existing seeded rng
 
             conf = self.cdict
-            nband = len(conf['filters'])
+            nband = len(conf['bands_fit'])
             self._prior = priors.get_joint_prior(
                 conf['obj'],
                 nband,
@@ -837,7 +837,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             (n('stamp_size'), 'size of postage stamp', np.int32, ''),
             (n('maskfrac'), 'mean masked fraction', np.float32, ''),
         ]
-        for filt in config['filters']:
+        for filt in config['bands_fit']:
             mtypes += [
                 (n('maskfrac_%s' % filt), 'masked fraction in %s filter' % filt, np.float32, ''),
             ]
@@ -854,7 +854,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
         ]
 
         # PSF measurements by filter
-        for filt in config['filters']:
+        for filt in config['bands_fit']:
             pfn = self.get_psf_namer(filt=filt)
             mtypes += [
                 (pfn('flags'), 'overall flags for PSF processing in %s filter' % filt, np.int32, ''),
@@ -866,7 +866,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             ]
 
         # PSF flux measurements, on the object, by filter
-        # for filt in config['filters']:
+        # for filt in config['bands_fit']:
         #    pfn=self.get_psf_flux_namer(filt)
         #    mtypes += [
         #        (pfn('flux_flags'),
@@ -907,7 +907,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
                     (mn('fracdev_err'), 'error on fraction of light in the bulge', np.float64, ''),
                 ]
 
-            for filt in config['filters']:
+            for filt in config['bands_fit']:
                 mfn = self.get_model_flux_namer(filt, type=type)
                 mtypes += [
                     (mfn('flux'), 'flux in the %s filter' % filt, np.float64, ''),
@@ -998,7 +998,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
 
             output[n('stamp_size')] = stamp_size
             output[n('maskfrac')] = res['maskfrac']
-            for ifilt, filt in enumerate(self.cdict['filters']):
+            for ifilt, filt in enumerate(self.cdict['bands_fit']):
                 output[n('maskfrac_%s' % filt)] = res['maskfrac_byband'][ifilt]
 
             self._copy_psf_fit_result(res['noshear']['psf'], output)
@@ -1030,7 +1030,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             return
 
         config = self.cdict
-        for ifilt, filt in enumerate(config['filters']):
+        for ifilt, filt in enumerate(config['bands_fit']):
             filt_res = pres['byband'][ifilt]
 
             if filt_res is not None:
@@ -1052,7 +1052,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             return
 
         config = self.cdict
-        for ifilt, filt in enumerate(config['filters']):
+        for ifilt, filt in enumerate(config['bands_fit']):
             filt_res = pres['byband'][ifilt]
 
             if filt_res is not None:
@@ -1100,7 +1100,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
                     output[mn(n)] = pars[i]
                     output[mn(n+'_err')] = perr[i]
 
-                for ifilt, filt in enumerate(config['filters']):
+                for ifilt, filt in enumerate(config['bands_fit']):
 
                     ind = flux_start+ifilt
                     mfn = self.get_model_flux_namer(filt, type=type)
@@ -1180,7 +1180,7 @@ class ProcessCoaddsMetacalMaxTask(ProcessCoaddsNGMixBaseTask):
             # an existing seeded rng
 
             conf = self.cdict
-            nband = len(conf['filters'])
+            nband = len(conf['bands_fit'])
             self._prior = priors.get_joint_prior(
                 conf['obj'],
                 nband,

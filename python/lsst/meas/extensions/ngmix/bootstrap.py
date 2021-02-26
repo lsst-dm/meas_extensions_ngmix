@@ -144,7 +144,7 @@ class MaxBootstrapper(BootstrapperBase):
                 tres['g2'] = g2
                 tres['T'] = T
             else:
-                filt = self.cdict['filters'][band]
+                filt = self.cdict['bands_fit'][band]
                 logger.debug('psf fit failed for filter %s' % filt)
 
             pres_byband.append(tres)
@@ -176,7 +176,7 @@ class MaxBootstrapper(BootstrapperBase):
         for band, obs_list in enumerate(mbobs):
 
             if not obs_list[0].has_psf_gmix():
-                filt = self.cdict['filters'][band]
+                filt = self.cdict['bands_fit'][band]
                 tres = {'flags': procflags.NO_ATTEMPT}
                 logger.debug('not fitting psf flux in '
                              'filter %s due to missing PSF fit' % filt)

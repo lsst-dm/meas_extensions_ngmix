@@ -255,7 +255,7 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     """
     basic config loads filters and misc stuff
     """
-    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
+    bands_fit = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
 
     stamps = ConfigField(dtype=StampsConfig, doc="configuration for postage stamps")
 
