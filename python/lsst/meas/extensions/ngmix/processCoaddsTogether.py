@@ -53,7 +53,6 @@ class ProcessCoaddsTogetherConfig(Config):
         dtype=str,
     )
     numSourcesLog = Field(doc='Number of sources to fit before logging status', default=100, dtype=int)
-    numSourcesWrite = Field(doc='Number of sources to fit before incremental writing', default=100, dtype=int)
     deblendReplacer = ConfigField(
         dtype=NoiseReplacerConfig,
         doc=("Details for how to replace neighbors with noise when applying deblender outputs. "

@@ -331,7 +331,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
             ntot = len(cat)
             start = self.cdict['start_index']
-            num = self.cdict['num_to_process']
+            num = self.cdict.get('num_to_process')
             if start is None:
                 start = 0
             else:
