@@ -22,21 +22,23 @@
 # TODO: this module should be moved elsewhere (probably pipe_tasks)
 # once it's stable.
 
-from lsst.afw.table import SourceCatalog
+from lsst.afw.table import Schema, SourceCatalog
 from lsst.pipe.base import (
     CmdLineTask, ArgumentParser,
 )
-from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
-from lsst.pex.config import Config, ConfigField, Field
+from lsst.meas.base import NoiseReplacerConfig
+from lsst.pex.config import ConfigField, Field
 
 from lsst.coadd.utils.coaddDataIdContainer import ExistingCoaddDataIdContainer
-from lsst.pipe.tasks.multiBand import MergeSourcesRunner, getShortFilterName
+from lsst.pipe.tasks.multiBand import MergeSourcesRunner
+from lsst.pipe.tasks.fit_multiband import CatalogExposure, MultibandFitSubConfig, MultibandFitSubTask
 
+from typing import List
 
 __all__ = ("ProcessCoaddsTogetherConfig", "ProcessCoaddsTogetherTask")
 
 
-class ProcessCoaddsTogetherConfig(Config):
+class ProcessCoaddsTogetherConfig(MultibandFitSubConfig):
     images = Field(
         doc="Coadd image DatasetType used as input (one for each band)",
         default="deepCoadd_calexp",
@@ -56,11 +58,17 @@ class ProcessCoaddsTogetherConfig(Config):
     deblendReplacer = ConfigField(
         dtype=NoiseReplacerConfig,
         doc=("Details for how to replace neighbors with noise when applying deblender outputs. "
-             "Ignored if `useDeblending == False`.")
+             "Ignored if `useDeblends` == False."),
+    )
+    deblendReplacerUseMetadata = Field(
+        doc="Whether to use catalog metadata to initialize NoiseReplacer config."
+            " Overrides `deblendReplacer` if True.",
+        dtype=bool,
+        default=True,
     )
     deblendCatalog = Field(
         doc=("Catalog DatasetType from which to extract deblended [Heavy]Footprints (one for each band). "
-             "Ignored if 'useDeblending == False'."),
+             "Ignored if 'useDeblends` == False."),
         default="deepCoadd_meas",
         dtype=str,
     )
@@ -72,7 +80,7 @@ class ProcessCoaddsTogetherConfig(Config):
     )
 
 
-class ProcessCoaddsTogetherTask(CmdLineTask):
+class ProcessCoaddsTogetherTask(CmdLineTask, MultibandFitSubTask):
     _DefaultName = "processCoaddsTogether"
     ConfigClass = ProcessCoaddsTogetherConfig
 
@@ -83,6 +91,10 @@ class ProcessCoaddsTogetherTask(CmdLineTask):
 
     # TODO: override DatasetType introspection for PipelineTask.  Probably
     # blocked on DM-16275.
+
+    @property
+    def schema(self) -> Schema:
+        return self._schema
 
     @classmethod
     def _makeArgumentParser(cls):
@@ -96,17 +108,18 @@ class ProcessCoaddsTogetherTask(CmdLineTask):
                                help="data ID, e.g. --id tract=12345 patch=1,2 filter=g^r^i")
         return parser
 
-    def __init__(self, *, config=None, refSchema=None, butler=None, initInputs=None, **kwds):
-        super().__init__(config=config, **kwds)
-        if refSchema is None:
+    def __init__(self, *, schema=None, config=None, butler=None, initInputs=None, **kwds):
+        CmdLineTask.__init__(self, config=config, **kwds)
+        MultibandFitSubTask.__init__(self, config=config, schema=schema, **kwds)
+        if schema is None:
             if butler is None:
                 if initInputs is not None:
-                    refSchema = initInputs.get("refSchema", None)
-                if refSchema is None:
-                    refSchema = SourceCatalog.Table.makeMinimalSchema()
+                    schema = initInputs.get("refSchema", None)
+                if schema is None:
+                    schema = SourceCatalog.Table.makeMinimalSchema()
             else:
-                refSchema = butler.get(self.config.ref + "_schema").schema
-        self.schema = self.defineSchema(refSchema)
+                schema = butler.get(self.config.ref + "_schema").schema
+        self._schema = self.defineSchema(schema)
 
     def getInitOutputDatasets(self):
         # Customize init output dataset retrieval for PipelineTask.
@@ -132,25 +145,25 @@ class ProcessCoaddsTogetherTask(CmdLineTask):
         patchRefList : `list` of `lsst.daf.persistence.ButlerDataRef`
             A list of DataRefs for all filters in a single patch.
         """
-        images = {}
-        replacers = {} if self.config.useDeblends else None
+        catexps = []
         mergedDataId = {"tract": patchRefList[0].dataId["tract"],
                         "patch": patchRefList[0].dataId["patch"]}
         butler = patchRefList[0].butlerSubset.butler
         ref = butler.get("deepCoadd_ref", dataId=mergedDataId)
-        imageId = butler.get("deepMergedCoaddId", dataId=mergedDataId)
+        expId = butler.get("deepMergedCoaddId", dataId=mergedDataId)
+
         for patchRef in patchRefList:
-            filt = getShortFilterName(patchRef.dataId["filter"])
-            images[filt] = patchRef.get(self.config.images)
+            dataId = mergedDataId.copy()
+            dataId['band'] = patchRef.dataId["filter"]
+            image = patchRef.get(self.config.images)
             if self.config.useDeblends:
                 fpCat = patchRef.get(self.config.deblendCatalog)
-                footprints = {rec.getId(): (rec.getParent(), rec.getFootprint()) for rec in fpCat}
-                replacers[filt] = NoiseReplacer(self.config.deblendReplacer, exposure=images[filt],
-                                                footprints=footprints, exposureId=imageId)
-        outputIncremental = self.config.numSourcesWrite > 0
-        results = self.run(
-            images, ref, imageId=imageId, replacers=replacers, butler=butler if outputIncremental else None,
-            kwargs_butler={'dataId': mergedDataId} if outputIncremental else {})
+            else:
+                fpCat = None
+            catexps.append(
+                CatalogExposure(dataId=dataId, exposure=image, catalog=fpCat, id_tract_patch=expId)
+            )
+        results = self.run(catexps, ref)
         butler.put(results.output, self.config.output, dataId=mergedDataId)
 
     def defineSchema(self, refSchema):
@@ -170,16 +183,16 @@ class ProcessCoaddsTogetherTask(CmdLineTask):
         """
         raise NotImplementedError("Must be implemented by derived classes.")
 
-    def run(self, images, ref, imageId, replacers, butler=None, kwargs_butler=None):
+    def run(self, catexps: List[CatalogExposure], cat_ref: SourceCatalog):
         """Process coadds from all bands for a single patch.
 
         This method should not add or modify self.
 
         Parameters
         ----------
-        images : `dict` of `lsst.afw.image.ExposureF`
+        catexps : `List [CatalogExposure]`
             Coadd images and associated metadata, keyed by filter name.
-        ref : `lsst.afw.table.SourceCatalog`
+        cat_ref : `lsst.afw.table.SourceCatalog`
             A catalog with one record for each object, containing "best"
             measurements across all bands.
 

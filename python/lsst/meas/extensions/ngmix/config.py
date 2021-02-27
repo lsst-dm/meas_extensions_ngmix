@@ -255,7 +255,8 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     """
     basic config loads filters and misc stuff
     """
-    bands_fit = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
+    bands_fit = ListField(dtype=str, default=[], doc="List of expected bandpass filters to fit.",
+                          listCheck=lambda x: len(set(x)) == len(x))
 
     stamps = ConfigField(dtype=StampsConfig, doc="configuration for postage stamps")
 
@@ -282,11 +283,18 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
         optional=True,
         doc='prefix to add to plot names',
     )
-    seed = Field(
+    seed_increment = Field(
         dtype=int,
         default=0,
         optional=True,
-        doc='random number generator seed',
+        doc='random number generator seed increment for ngmix (added to tract+patch id)',
+    )
+    seed_increment_NoiseReplacer = Field(
+        dtype=int,
+        default=0,
+        optional=True,
+        doc='random number generator seed increment for NoiseReplacers'
+            ' (added to catalog seed, usually tract+patch+band id)',
     )
 
 

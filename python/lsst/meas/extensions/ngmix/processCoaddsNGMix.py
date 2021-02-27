@@ -64,7 +64,10 @@ import time
 import numpy as np
 import ngmix
 from lsst.afw.table import SourceCatalog, SchemaMapper
+from lsst.meas.base import NoiseReplacer, NoiseReplacerConfig, SingleFrameMeasurementTask as SFMT
 import lsst.pipe.base as pipeBase
+from lsst.pipe.tasks.fit_multiband import CatalogExposure
+from typing import List
 
 from .processCoaddsTogether import ProcessCoaddsTogetherTask
 from . import util
@@ -109,53 +112,76 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
             self._cdict = self.config.toDict()
         return self._cdict
 
-    def run(self, images, ref, replacers, imageId, butler=None, kwargs_butler=None):
+    def run(self, catexps: List[CatalogExposure], cat_ref: SourceCatalog):
         """Process coadds from all bands for a single patch.
 
         This method should not add or modify self.
 
-        So far all children are u sing this exact code so leaving
+        So far all children are using this exact code so leaving
         it here for now. If we specialize a lot, might make a
         processor its own object
 
         Parameters
         ----------
-        images : `dict` of `lsst.afw.image.ExposureF`
-            Coadd images and associated metadata, keyed by filter name.
-        ref : `lsst.afw.table.SourceCatalog`
+        catexps : `Dict [CatalogExposure]`
+            List of coadd images and associated catalogs/metadata.
+        cat_ref : `lsst.afw.table.SourceCatalog`
             A catalog with one record for each object, containing "best"
             measurements across all bands.
-        replacers : `dict` of `lsst.meas.base.NoiseReplacer`, optional
-            A dictionary of `~lsst.meas.base.NoiseReplacer` objects that can
-            be used to insert and remove deblended pixels for each object.
-            When not `None`, all detected pixels in ``images`` will have
-            *already* been replaced with noise, and this *must* be used
-            to restore objects one at a time.
-        imageId : `int`
-            Unique ID for this unit of data.  Should be used (possibly
-            indirectly) to seed random numbers.
-        butler : `lsst.daf.persistence.Butler`
-            Butler to output incremental results to if enabled.
-        kwargs_butler : `dict`
-            Additional keyword arguments to pass to `butler`.put() for
-            incremental output; default {}.
+
         Returns
         -------
         results : `lsst.pipe.base.Struct`
             Struct with (at least) an `output` attribute that is a catalog
             to be written as ``self.config.output``.
         """
-
         tm0 = time.time()
         nproc = 0
 
-        self.set_rng(self.config.seed)
+        seed = next(iter(catexps)).id_tract_patch + self.config.seed_increment
+        self.set_rng(seed=seed)
 
         config = self.cdict
         self.log.info(pprint.pformat(config))
 
+        n_images = len(catexps)
+        images = [None]*n_images
+        replacers = [None]*n_images
+        replace = config['useDeblends']
+        for idx, catexp in enumerate(catexps):
+            images[idx] = catexp.exposure
+            if replace:
+                catalog = catexp.catalog
+                footprints = {rec.getId(): (rec.getParent(), rec.getFootprint()) for rec in catalog}
+                try:
+                    metadata = catalog.getMetadata()
+                    exposureId = catalog.getMetadata().getScalar(SFMT.NOISE_EXPOSURE_ID)
+                except Exception:
+                    metadata = None
+                    exposureId = seed
+                # If user specifies a NoiseReplacer config and insists, use it
+                # Otherwise, use the same config as the catalog metadata says
+                # was used for measurements, so that ngmix fits the same images
+                if self.config.deblendReplacerUseMetadata:
+                    try:
+                        config_replacer = NoiseReplacerConfig(
+                            noiseSeedMultiplier=metadata.getScalar(SFMT.NOISE_SEED_MULTIPLIER),
+                            noiseSource=metadata.getScalar(SFMT.NOISE_SOURCE),
+                            noiseOffset=metadata.getScalar(SFMT.NOISE_OFFSET),
+                        )
+                    except Exception:
+                        config_replacer = NoiseReplacerConfig()
+                else:
+                    config_replacer = self.config.deblendReplacer
+
+                exposureId += self.config.seed_increment_NoiseReplacer
+                replacer = NoiseReplacer(config_replacer, exposure=catexp.exposure,
+                                         footprints=footprints, exposureId=exposureId)
+                catexp.metadata['noiseReplacer'] = replacer
+            replacers[idx] = catexp.metadata.get('noiseReplacer')
+
         try:
-            extractor = self._get_extractor(images)
+            extractor = self._get_extractor({catexp.dataId['band']: catexp.exposure for catexp in catexps})
         except MBObsMissingDataError as err:
             self.log.info(str(err))
             extractor = None
@@ -164,35 +190,27 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         output = SourceCatalog(self.schema)
 
         # Add mostly-empty rows to it, copying IDs from the ref catalog.
-        output.extend(ref, mapper=self.mapper)
+        output.extend(cat_ref, mapper=self.mapper)
 
         # Write log every numSourcesLog steps
         log = self.config.numSourcesLog > 0
 
-        # Write catalog every numSourcesWrite steps if
-        output_incremental = butler is not None and (self.config.numSourcesWrite > 0)
-        if output_incremental and kwargs_butler is None:
-            kwargs_butler = {}
-
         index_range = self.get_index_range(output)
 
-        for n, (outRecord, refRecord) in enumerate(zip(output, ref)):
+        for n, (outRecord, refRecord) in enumerate(zip(output, cat_ref)):
             if n < index_range[0] or n > index_range[1]:
                 continue
 
             if log and ((n % self.config.numSourcesLog) == 0):
                 self.log.info('index: %06d/%06d' % (n, index_range[1]))
 
-            if output_incremental and ((n % self.config.numSourcesWrite) == 0):
-                butler.put(output, self.config.output, **kwargs_butler)
-
             nproc += 1
 
             outRecord.setFootprint(None)  # copied from ref; don't need to write these again
 
             # Insert the deblended pixels for just this object into all images.
-            if replacers is not None:
-                for r in replacers.values():
+            if replace:
+                for r in replacers:
                     r.insertSource(refRecord.getId())
 
             if extractor is None:
@@ -203,7 +221,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
                 try:
                     mbobs = extractor.get_mbobs(refRecord)
-                    res = self._process_observations(ref['id'][n], mbobs)
+                    res = self._process_observations(cat_ref['id'][n], mbobs)
                 except MBObsMissingDataError as err:
                     self.log.debug(str(err))
                     mbobs = None
@@ -219,13 +237,13 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
 
             # Remove the deblended pixels for this object so we can process
             # the next one.
-            if replacers is not None:
-                for r in replacers.values():
+            if replace:
+                for r in replacers:
                     r.removeSource(refRecord.getId())
 
         # Restore all original pixels in the images.
-        if replacers is not None:
-            for r in replacers.values():
+        if replace:
+            for r in replacers:
                 r.end()
 
         tm = time.time()-tm0
@@ -1203,20 +1221,15 @@ class ProcessDeblendedCoaddsNGMixMaxTask(ProcessCoaddsNGMixMaxTask):
     _DefaultName = "processDeblendedCoaddsNGMixMax"
     ConfigClass = ProcessDeblendedCoaddsNGMixMaxConfig
 
-    def run(self, images, ref, replacers, imageId, butler=None, kwargs_butler=None):
+    def __init__(self, *args, **kwargs):
         """
         make sure we are using the deblended images
         """
-        check = (
-            replacers is not None
-            and self.cdict['useDeblends'] is True
-        )
-        assert check,\
-            'You must set useDeblends=True and send noise replacers'
+        super().__init__(*args, **kwargs)
+        assert self.cdict['useDeblends'] is True, 'You must set useDeblends=True'
 
-        return super(ProcessDeblendedCoaddsNGMixMaxTask, self).run(
-            images, ref, replacers, imageId, butler=butler, kwargs_butler=kwargs_butler,
-        )
+    def run(self, catexps: List[CatalogExposure], cat_ref: SourceCatalog):
+        return super(ProcessDeblendedCoaddsNGMixMaxTask, self).run(catexps, cat_ref)
 
 
 class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
@@ -1227,20 +1240,15 @@ class ProcessDeblendedCoaddsMetacalMaxTask(ProcessCoaddsMetacalMaxTask):
     _DefaultName = "processDeblendedCoaddsMetacalMax"
     ConfigClass = ProcessDeblendedCoaddsMetacalMaxConfig
 
-    def run(self, images, ref, replacers, imageId, butler=None, kwargs_butler=None):
+    def __init__(self, *args, **kwargs):
         """
         make sure we are using the deblended images
         """
-        check = (
-            replacers is not None
-            and self.cdict['useDeblends'] is True
-        )
-        assert check,\
-            'You must set useDeblends=True and send noise replacers'
+        super().__init__(*args, **kwargs)
+        assert self.cdict['useDeblends'] is True, 'You must set useDeblends=True'
 
-        return super(ProcessDeblendedCoaddsMetacalMaxTask, self).run(
-            images, ref, replacers, imageId, butler=butler, kwargs_butler=kwargs_butler,
-        )
+    def run(self, catexps: List[CatalogExposure], cat_ref: SourceCatalog):
+        return super(ProcessDeblendedCoaddsMetacalMaxTask, self).run(catexps, cat_ref)
 
 
 def make_image_plots(id, images, ncols=1, titles=None, show=False):
