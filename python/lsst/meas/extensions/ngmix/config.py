@@ -282,6 +282,12 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
         optional=True,
         doc='prefix to add to plot names',
     )
+    seed = Field(
+        dtype=int,
+        default=0,
+        optional=True,
+        doc='random number generator seed',
+    )
 
 
 class ProcessCoaddsNGMixMaxConfig(BasicProcessConfig):

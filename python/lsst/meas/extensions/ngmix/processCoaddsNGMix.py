@@ -149,7 +149,7 @@ class ProcessCoaddsNGMixBaseTask(ProcessCoaddsTogetherTask):
         tm0 = time.time()
         nproc = 0
 
-        self.set_rng(imageId)
+        self.set_rng(self.config.seed)
 
         config = self.cdict
         self.log.info(pprint.pformat(config))
