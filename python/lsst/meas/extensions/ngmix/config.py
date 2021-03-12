@@ -74,14 +74,17 @@ class LeastsqConfig(Config):
     """
     maxfev = Field(
         dtype=int,
+        optional=True,
         doc='max allowed number of function evaluations in scipy.leastsq',
     )
     xtol = Field(
         dtype=float,
+        optional=True,
         doc='xtol paramter for scipy.leastsq',
     )
     ftol = Field(
         dtype=float,
+        optional=True,
         doc='ftol paramter for scipy.leastsq',
     )
 
@@ -89,6 +92,7 @@ class LeastsqConfig(Config):
 class MaxConfig(Config):
     ntry = Field(
         dtype=int,
+        optional=True,
         doc='number of times to attempt the fit with different guesses',
     )
     lm_pars = ConfigField(
@@ -108,7 +112,7 @@ class CenPriorConfig(Config):
         },
         doc="type of prior for center",
     )
-    pars = ListField(dtype=float, doc="parameters for the center prior")
+    pars = ListField(dtype=float, optional=True, doc="parameters for the center prior")
 
 
 class GPriorConfig(Config):
@@ -122,7 +126,7 @@ class GPriorConfig(Config):
         },
         doc="type of prior for ellipticity g",
     )
-    pars = ListField(dtype=float, doc="parameters for the ellipticity prior")
+    pars = ListField(dtype=float, optional=True, doc="parameters for the ellipticity prior")
 
 
 class TPriorConfig(Config):
@@ -136,7 +140,7 @@ class TPriorConfig(Config):
         },
         doc="type of prior for the square size T",
     )
-    pars = ListField(dtype=float, doc="parameters for the T prior")
+    pars = ListField(dtype=float, optional=True, doc="parameters for the T prior")
 
 
 class FluxPriorConfig(Config):
@@ -150,7 +154,7 @@ class FluxPriorConfig(Config):
         },
         doc="type of prior for the flux; gets repeated for multiple bands",
     )
-    pars = ListField(dtype=float, doc="parameters for the flux prior")
+    pars = ListField(dtype=float, optional=True, doc="parameters for the flux prior")
 
 
 class FracdevPriorConfig(Config):
@@ -217,6 +221,7 @@ class PSFMaxFitConfig(MaxFitConfigBase):
     )
     fwhm_guess = Field(
         dtype=float,
+        optional=True,
         doc='rough guess for PSF FWHM',
     )
 
@@ -250,7 +255,8 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     """
     basic config loads filters and misc stuff
     """
-    filters = ListField(dtype=str, default=[], doc="List of expected bandpass filters.")
+    bands_fit = ListField(dtype=str, default=[], doc="List of expected bandpass filters to fit.",
+                          listCheck=lambda x: len(set(x)) == len(x))
 
     stamps = ConfigField(dtype=StampsConfig, doc="configuration for postage stamps")
 
@@ -262,11 +268,9 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
     )
     num_to_process = Field(
         dtype=int,
-        default=None,
         optional=True,
         doc='optional number to process',
     )
-
     make_plots = Field(
         dtype=bool,
         default=False,
@@ -278,6 +282,19 @@ class BasicProcessConfig(ProcessCoaddsTogetherConfig):
         default=None,
         optional=True,
         doc='prefix to add to plot names',
+    )
+    seed_increment = Field(
+        dtype=int,
+        default=0,
+        optional=True,
+        doc='random number generator seed increment for ngmix (added to tract+patch id)',
+    )
+    seed_increment_NoiseReplacer = Field(
+        dtype=int,
+        default=0,
+        optional=True,
+        doc='random number generator seed increment for NoiseReplacers'
+            ' (added to catalog seed, usually tract+patch+band id)',
     )
 
 
