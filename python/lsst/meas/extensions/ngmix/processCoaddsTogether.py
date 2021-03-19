@@ -30,7 +30,7 @@ from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
 from lsst.pex.config import Config, ConfigField, Field
 
 from lsst.coadd.utils.coaddDataIdContainer import ExistingCoaddDataIdContainer
-from lsst.pipe.tasks.multiBand import MergeSourcesRunner, getShortFilterName
+from lsst.pipe.tasks.multiBand import MergeSourcesRunner
 
 
 __all__ = ("ProcessCoaddsTogetherConfig", "ProcessCoaddsTogetherTask")
@@ -141,7 +141,7 @@ class ProcessCoaddsTogetherTask(CmdLineTask):
         ref = butler.get("deepCoadd_ref", dataId=mergedDataId)
         imageId = butler.get("deepMergedCoaddId", dataId=mergedDataId)
         for patchRef in patchRefList:
-            filt = getShortFilterName(patchRef.dataId["filter"])
+            filt = patchRef.dataId["filter"]
             images[filt] = patchRef.get(self.config.images)
             if self.config.useDeblends:
                 fpCat = patchRef.get(self.config.deblendCatalog)
