@@ -5,7 +5,7 @@ There are bootstrappers in the ngmix code base but they need to be refactored.
 Also we don't plan to support multi-epoch fitting so these can be simplified
 """
 
-import lsst.log
+import logging
 import numpy as np
 import ngmix
 from ngmix.gexceptions import GMixRangeError, BootPSFFailure
@@ -14,7 +14,7 @@ from . import procflags
 
 from copy import deepcopy
 
-logger = lsst.log.Log.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 DEFAULT_RESULT = {
     # overall processing flags
