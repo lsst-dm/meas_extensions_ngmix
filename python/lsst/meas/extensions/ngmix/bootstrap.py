@@ -14,7 +14,7 @@ from . import procflags
 
 from copy import deepcopy
 
-logger = lsst.log.Log.getLogger("meas.extensions.ngmix.bootstrap")
+logger = lsst.log.Log.getLogger(__name__)
 
 DEFAULT_RESULT = {
     # overall processing flags

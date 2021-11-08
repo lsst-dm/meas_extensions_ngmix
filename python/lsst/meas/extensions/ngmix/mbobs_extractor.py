@@ -35,7 +35,7 @@ class MBObsExtractor(object):
     def __init__(self, config, images):
         self.config = config
         self.images = images
-        self.log = lsst.log.Log.getLogger("meas.extensions.ngmix.MBObsExtractor")
+        self.log = lsst.log.Log.getLogger("lsst.meas.extensions.ngmix.MBObsExtractor")
 
         self._verify()
 

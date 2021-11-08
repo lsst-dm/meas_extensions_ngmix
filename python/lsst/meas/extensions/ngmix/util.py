@@ -1,7 +1,7 @@
 import numpy as np
 import lsst.log
 
-logger = lsst.log.Log.getLogger("meas.extensions.ngmix.util")
+logger = lsst.log.Log.getLogger(__name__)
 
 
 class Namer(object):
