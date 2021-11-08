@@ -1,6 +1,6 @@
+import logging
 import numpy as np
 import ngmix
-import lsst.log
 import lsst.afw.image as afwImage
 from lsst.pex.exceptions import InvalidParameterError
 import lsst.geom as geom
@@ -35,7 +35,7 @@ class MBObsExtractor(object):
     def __init__(self, config, images):
         self.config = config
         self.images = images
-        self.log = lsst.log.Log.getLogger("meas.extensions.ngmix.MBObsExtractor")
+        self.log = logging.getLogger("lsst.meas.extensions.ngmix.MBObsExtractor")
 
         self._verify()
 
